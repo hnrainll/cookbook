@@ -11,7 +11,7 @@
 ## 安装依赖
 
 ```bash
-pip install -r requirements.txt
+uv sync
 ```
 
 ## 配置说明
@@ -43,7 +43,11 @@ FANFOU_ACCESS_TOKEN_SECRET=your_access_token_secret
 运行主程序：
 
 ```bash
-python fanfou_bot.py
+# 本地测试
+uvicorn cookbook.main:app --host 0.0.0.0 --port 8009 --reload --reload-dir .
+
+# 线上部署
+gunicorn cookbook.main:app -w 1 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8009
 ```
 
 ## 注意事项
