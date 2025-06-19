@@ -8,6 +8,7 @@ dependencies = [
     "fastapi>=0.115.12",
     "gunicorn>=23.0.0",
     "lark-oapi>=1.4.18",
+    "loguru>=0.7.3",
     "python-dotenv>=1.1.0",
     "requests==2.31.0",
     "uvicorn>=0.34.3",
