@@ -1,9 +1,15 @@
 from contextlib import asynccontextmanager
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from loguru import logger
 
-from cookbook.feishu_bot import lark_ws_client
+from cookbook.feishu_ws_manager import LarkWebSocketManager
+
+
+load_dotenv()
+lark_ws_manager = LarkWebSocketManager()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -14,28 +20,29 @@ async def lifespan(app: FastAPI):
     await life_end()
 
 
-# 创建 FastAPI 应用实例
-app = FastAPI(
-    title="Hello Cookbook",
-    description="一个简单的 FastAPI Hello Cookbook 示例",
-    version="1.0.0",
-    lifespan=lifespan
-)
-
 async def life_start():
     logger.info("Start...")
-    await lark_ws_client.start()
+    lark_ws_manager.start()
 
 
 async def life_end():
     logger.info("End...")
+    lark_ws_manager.stop()
+
+
+app = FastAPI(
+    title="Hello Cookbook",
+    description="FastAPI Hello Cookbook",
+    version="1.0.0",
+    lifespan=lifespan
+)
 
 
 @app.get("/")
 async def root():
-    """根路径 - 最基础的 Hello World"""
     return {"message": "Hello Cookbook!"}
 
 
-import sys
-logger.info(sys.path)
+@app.get("/hello")
+async def hello():
+    return {"message": "FastAPI Cookbook!"}

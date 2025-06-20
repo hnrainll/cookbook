@@ -1,10 +1,7 @@
 import json
 
 import lark_oapi as lark
-from dotenv import load_dotenv
 from lark_oapi.api.im.v1 import *
-
-load_dotenv()
 
 
 # 注册接收消息事件，处理接收到的消息。
