@@ -47,7 +47,7 @@ async def hello():
     return {"message": "FastAPI Cookbook!"}
 
 
-@app.post("/fanfou_auth")
+@app.post("/auth")
 async def hello(request: Request):
     logger.info(request)
     return {"message": "FastAPI Cookbook!"}
