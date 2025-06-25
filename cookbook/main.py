@@ -55,6 +55,7 @@ async def hello():
 @app.get("/auth")
 async def auth(request: Request):
     logger.info(request)
+    request.body()
     full_url = str(request.url)  # 完整URL
     logger.info(full_url)
     return {"message": "Cookbook Auth!"}

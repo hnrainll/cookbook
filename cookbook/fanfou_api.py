@@ -14,6 +14,7 @@ def gen_fanfou_auth_url():
     result, response = ff.request_token()
 
     logger.info(result)
+    logger.info(type(response))
     logger.info(response)
 
     url = f"https://fanfou.com/oauth/authorize?oauth_token={ff.oauth_token}&oauth_callback=https://wenhao.ink/fanshu/auth"
