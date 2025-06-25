@@ -1,11 +1,13 @@
-from fanfou_sdk import Fanfou
-
-from loguru import logger
-
 import os
 
+from fanfou_sdk import Fanfou
+from loguru import logger
 
-def gen_fanfou_auth_url():
+ff: Fanfou | None = None
+
+def gen_auth_url():
+    global ff
+
     ff = Fanfou(
         consumer_key=os.getenv('FANFOU_CONSUMER_KEY'),
         consumer_secret=os.getenv('FANFOU_CONSUMER_SECRET')
@@ -19,6 +21,14 @@ def gen_fanfou_auth_url():
 
     url = f"https://fanfou.com/oauth/authorize?oauth_token={ff.oauth_token}&oauth_callback=https://wenhao.ink/fanshu/auth"
     print(url)
+    return url
 
+def get_access_token():
+    token = {
+        'oauth_token': ff.oauth_token,
+        'oauth_token_secret': ff.oauth_token_secret
+    }
 
-    # const url = `https://m.fanfou.com/oauth/authorize?oauth_token=${ff.oauthToken}&oauth_callback=https://labs.1a23.com/fanfou_auth`;
+    result, response = ff.access_token(token)
+    logger.info(result)
+    logger.info(response)
