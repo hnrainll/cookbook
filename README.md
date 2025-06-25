@@ -25,8 +25,6 @@ FEISHU_WEBHOOK=your_feishu_webhook_url
 # 饭否API配置
 FANFOU_CONSUMER_KEY=your_consumer_key
 FANFOU_CONSUMER_SECRET=your_consumer_secret
-FANFOU_ACCESS_TOKEN=your_access_token
-FANFOU_ACCESS_TOKEN_SECRET=your_access_token_secret
 ```
 
 2. 获取飞书机器人 Webhook：
