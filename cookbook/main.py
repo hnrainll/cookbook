@@ -1,11 +1,10 @@
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from loguru import logger
 
 from cookbook.feishu_ws_manager import LarkWebSocketManager
-
 
 load_dotenv()
 lark_ws_manager = LarkWebSocketManager()
@@ -45,4 +44,10 @@ async def root():
 
 @app.get("/hello")
 async def hello():
+    return {"message": "FastAPI Cookbook!"}
+
+
+@app.post("/fanfou_auth")
+async def hello(request: Request):
+    logger.info(request)
     return {"message": "FastAPI Cookbook!"}
