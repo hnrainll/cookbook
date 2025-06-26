@@ -4,6 +4,58 @@ import lark_oapi as lark
 from lark_oapi.api.im.v1 import *
 from loguru import logger
 
+from cookbook.fanfou_api import gen_auth_url
+
+
+def send_message(open_id: str, chat_message: str) -> CreateMessageResponse:
+    content = json.dumps(
+        {
+            "text": chat_message
+        }
+    )
+
+    request: CreateMessageRequest = (
+        CreateMessageRequest.builder()
+        .receive_id_type("open_id")
+        .request_body(
+            CreateMessageRequestBody.builder()
+            .receive_id(open_id)
+            .msg_type("text")
+            .content(content)
+            .build()
+        )
+        .build()
+    )
+
+    # 使用OpenAPI发送消息
+    # Use send OpenAPI to send messages
+    # https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/im-v1/message/create
+    response: CreateMessageResponse = client.im.v1.message.create(request)
+
+    return response
+
+
+def reply_message(message_id: str, content: str) -> ReplyMessageResponse:
+    # data.event.message.message_id
+
+    request: ReplyMessageRequest = (
+        ReplyMessageRequest.builder()
+        .message_id(message_id)
+        .request_body(
+            ReplyMessageRequestBody.builder()
+            .content(content)
+            .msg_type("text")
+            .build()
+        )
+        .build()
+    )
+    # 使用OpenAPI回复消息
+    # Reply to messages using send OpenAPI
+    # https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/im-v1/message/reply
+    response: ReplyMessageResponse = client.im.v1.message.reply(request)
+
+    return response
+
 
 # 注册接收消息事件，处理接收到的消息。
 # Register event handler to handle received messages.
@@ -11,66 +63,41 @@ from loguru import logger
 def do_p2_im_message_receive_v1(data: P2ImMessageReceiveV1) -> None:
     logger.info(f'[ do_p2_im_message_receive_v1 access ], data: {lark.JSON.marshal(data, indent=4)}')
 
-    res_content = ""
     if data.event.message.message_type == "text":
         res_content = json.loads(data.event.message.content)["text"]
     else:
         res_content = "解析消息失败，请发送文本消息\nparse message failed, please send text message"
 
-    content = json.dumps(
-        {
-            "text": "收到你发送的消息："
-                    + res_content
-                    + "\nReceived message:"
-                    + res_content
-        }
-    )
+    content = f"收到你发送的消息：{res_content}\nReceived message: {res_content}"
 
     if data.event.message.chat_type == "p2p":
-        request = (
-            CreateMessageRequest.builder()
-            .receive_id_type("chat_id")
-            .request_body(
-                CreateMessageRequestBody.builder()
-                .receive_id(data.event.message.chat_id)
-                .msg_type("text")
-                .content(content)
-                .build()
-            )
-            .build()
-        )
-        # 使用OpenAPI发送消息
-        # Use send OpenAPI to send messages
-        # https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/im-v1/message/create
-        response = client.im.v1.chat.create(request)
+        response = send_message(data.event.sender.sender_id.open_id, content)
 
         if not response.success():
             raise Exception(
                 f"client.im.v1.chat.create failed, code: {response.code}, msg: {response.msg}, log_id: {response.get_log_id()}"
             )
     else:
-        request: ReplyMessageRequest = (
-            ReplyMessageRequest.builder()
-            .message_id(data.event.message.message_id)
-            .request_body(
-                ReplyMessageRequestBody.builder()
-                .content(content)
-                .msg_type("text")
-                .build()
-            )
-            .build()
+        raise Exception(
+            f"do_p2_im_message_receive_v1 chat_type error. current chat_type: {data.event.message.chat_type}"
         )
-        # 使用OpenAPI回复消息
-        # Reply to messages using send OpenAPI
-        # https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/im-v1/message/reply
-        response: ReplyMessageResponse = client.im.v1.message.reply(request)
-        if not response.success():
-            raise Exception(
-                f"client.im.v1.message.reply failed, code: {response.code}, msg: {response.msg}, log_id: {response.get_log_id()}"
-            )
+
 
 def do_p2_application_bot_menu_v6(data: lark.application.v6.P2ApplicationBotMenuV6) -> None:
     logger.info(f'[ do_p2_application_bot_menu_v6 access ], data: {lark.JSON.marshal(data, indent=4)}')
+
+    event_key = data.event.event_key
+    open_id = data.event.operator.operator_id.open_id
+
+    if event_key == 'login':
+        url = gen_auth_url(open_id)
+
+        response = send_message(open_id, f"请点击如下链接并授权登录。\n{url}")
+        if not response.success():
+            raise Exception(
+                f"client.im.v1.chat.create failed, code: {response.code}, msg: {response.msg}, log_id: {response.get_log_id()}"
+            )
+
 
 # 注册事件回调
 # Register event handler.

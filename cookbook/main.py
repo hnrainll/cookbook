@@ -6,13 +6,10 @@ from loguru import logger
 
 from cookbook.feishu_ws_manager import LarkWebSocketManager
 
-from cookbook.fanfou_api import gen_auth_url
-
 load_dotenv()
 lark_ws_manager = LarkWebSocketManager()
 
-
-gen_auth_url()
+from cookbook.fanfou_api import get_access_token
 
 
 @asynccontextmanager
@@ -53,9 +50,13 @@ async def hello():
 
 
 @app.get("/auth")
-async def auth(request: Request):
+async def auth(request: Request, oauth_token: str):
     logger.info(request)
     full_url = str(request.url)  # 完整URL
     logger.info(full_url)
-    return {"message": "Cookbook Auth!"}
+    logger.info(oauth_token)
+
+    result = get_access_token(oauth_token)
+    return {"message": result}
+
 

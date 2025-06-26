@@ -1,3 +1,4 @@
+import json
 import os
 
 from fanfou_sdk import Fanfou
@@ -5,7 +6,7 @@ from loguru import logger
 
 ff: Fanfou | None = None
 
-def gen_auth_url():
+def gen_auth_url(open_id: str):
     global ff
 
     ff = Fanfou(
@@ -13,22 +14,71 @@ def gen_auth_url():
         consumer_secret=os.getenv('FANFOU_CONSUMER_SECRET')
     )
 
-    result, response = ff.request_token()
-
-    logger.info(result)
-    logger.info(type(response))
+    token, response = ff.request_token()
+    logger.info(token)
     logger.info(response)
+
+    save_request_token(ff.oauth_token, token, open_id)
 
     url = f"https://fanfou.com/oauth/authorize?oauth_token={ff.oauth_token}&oauth_callback=https://wenhao.ink/fanshu/auth"
-    print(url)
+    logger.info(url)
     return url
 
-def get_access_token():
-    token = {
-        'oauth_token': ff.oauth_token,
-        'oauth_token_secret': ff.oauth_token_secret
+
+def get_access_token(oauth_token: str):
+    request_token = load_token(oauth_token)
+    logger.info(request_token)
+
+    if request_token:
+        # token = {
+        #     'oauth_token': ff.oauth_token,
+        #     'oauth_token_secret': ff.oauth_token_secret
+        # }
+        open_id = request_token['open_id']
+        token, response = ff.access_token(request_token['token'])
+        logger.info(token)
+        logger.info(response)
+
+        if token:
+            save_user_token(open_id, token)
+            return "授权成功"
+
+    return "授权失败"
+
+
+def save_request_token(oauth_token: str, token: dict, open_id: str):
+    data = {
+        'token': token,
+        'open_id': open_id
     }
 
-    result, response = ff.access_token(token)
-    logger.info(result)
-    logger.info(response)
+    try:
+        with open(oauth_token, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        logger.error(f"保存请求token失败: {e}")
+
+
+def save_user_token(open_id: str, token: dict):
+    user_token = {
+        'token': token
+    }
+
+    """保存处理进度到文件"""
+    try:
+        with open(open_id, 'w', encoding='utf-8') as f:
+            json.dump(user_token, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        logger.error(f"保存用户token失败: {e}")
+
+
+def load_token(file_name: str) -> dict| None:
+    if os.path.exists(file_name):
+        try:
+            with open(file_name, 'r', encoding='utf-8') as f:
+                token = json.load(f)
+            return token
+        except Exception as e:
+            logger.warning(f"加载Token{file_name}失败: {e}")
+
+    return None
