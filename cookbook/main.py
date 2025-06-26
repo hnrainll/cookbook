@@ -58,3 +58,4 @@ async def auth(request: Request):
     full_url = str(request.url)  # 完整URL
     logger.info(full_url)
     return {"message": "Cookbook Auth!"}
+
