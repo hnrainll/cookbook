@@ -4,11 +4,8 @@ import os
 from fanfou_sdk import Fanfou
 from loguru import logger
 
-ff: Fanfou | None = None
 
 def gen_auth_url(open_id: str):
-    global ff
-
     ff = Fanfou(
         consumer_key=os.getenv('FANFOU_CONSUMER_KEY'),
         consumer_secret=os.getenv('FANFOU_CONSUMER_SECRET')
@@ -18,7 +15,7 @@ def gen_auth_url(open_id: str):
     logger.info(token)
     logger.info(response)
 
-    save_request_token(ff.oauth_token, token, open_id)
+    _save_request_token(ff.oauth_token, token, open_id)
 
     url = f"https://fanfou.com/oauth/authorize?oauth_token={ff.oauth_token}&oauth_callback=https://wenhao.ink/fanshu/auth"
     logger.info(url)
@@ -26,27 +23,66 @@ def gen_auth_url(open_id: str):
 
 
 def get_access_token(oauth_token: str):
-    request_token = load_token(oauth_token)
+    request_token = _load_token(oauth_token)
     logger.info(request_token)
 
     if request_token:
-        # token = {
-        #     'oauth_token': ff.oauth_token,
-        #     'oauth_token_secret': ff.oauth_token_secret
-        # }
+        ff = Fanfou(
+            consumer_key=os.getenv('FANFOU_CONSUMER_KEY'),
+            consumer_secret=os.getenv('FANFOU_CONSUMER_SECRET')
+        )
+
         open_id = request_token['open_id']
         token, response = ff.access_token(request_token['token'])
         logger.info(token)
         logger.info(response)
 
         if token:
-            save_user_token(open_id, token)
+            _save_user_token(open_id, token)
             return "授权成功"
 
     return "授权失败"
 
 
-def save_request_token(oauth_token: str, token: dict, open_id: str):
+def post_status(open_id: str, text: str):
+    user_token = _load_token(open_id)
+    logger.info(user_token)
+
+    st = None
+    if user_token:
+        token = user_token['token']
+
+        logger.info(token)
+        logger.info(token['oauth_token'])
+        logger.info(token['oauth_token_secret'])
+
+        ff = Fanfou(
+            consumer_key=os.getenv('FANFOU_CONSUMER_KEY'),
+            consumer_secret=os.getenv('FANFOU_CONSUMER_SECRET'),
+            oauth_token=f"{token['oauth_token']}-fanfou",
+            oauth_token_secret=token['oauth_token_secret']
+        )
+
+        content = {
+            'status': text
+        }
+
+        # tl, _ = ff.get('/statuses/home_timeline')
+        # print(tl)
+
+        st, response = ff.post('/statuses/update', content)
+        logger.info(type(st))
+        logger.info(st)
+        logger.info(response.status_code)
+        logger.info(response.reason)
+        logger.info(response.ok)
+        logger.info(json.loads(response.text))
+        logger.info(response.content)
+        logger.info(response.headers)
+    return st
+
+
+def _save_request_token(oauth_token: str, token: dict, open_id: str):
     data = {
         'token': token,
         'open_id': open_id
@@ -59,12 +95,11 @@ def save_request_token(oauth_token: str, token: dict, open_id: str):
         logger.error(f"保存请求token失败: {e}")
 
 
-def save_user_token(open_id: str, token: dict):
+def _save_user_token(open_id: str, token: dict):
     user_token = {
         'token': token
     }
 
-    """保存处理进度到文件"""
     try:
         with open(open_id, 'w', encoding='utf-8') as f:
             json.dump(user_token, f, indent=2, ensure_ascii=False)
@@ -72,7 +107,7 @@ def save_user_token(open_id: str, token: dict):
         logger.error(f"保存用户token失败: {e}")
 
 
-def load_token(file_name: str) -> dict| None:
+def _load_token(file_name: str) -> dict| None:
     if os.path.exists(file_name):
         try:
             with open(file_name, 'r', encoding='utf-8') as f:

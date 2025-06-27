@@ -5,6 +5,7 @@ from lark_oapi.api.im.v1 import *
 from loguru import logger
 
 from cookbook.fanfou_api import gen_auth_url
+from cookbook.fanfou_api import post_status
 
 
 def send_message(open_id: str, chat_message: str) -> CreateMessageResponse:
@@ -70,13 +71,20 @@ def do_p2_im_message_receive_v1(data: P2ImMessageReceiveV1) -> None:
 
     content = f"收到你发送的消息：{res_content}\nReceived message: {res_content}"
 
+    open_id = data.event.sender.sender_id.open_id
+    logger.info(open_id)
+    logger.info(res_content)
     if data.event.message.chat_type == "p2p":
-        response = send_message(data.event.sender.sender_id.open_id, content)
 
-        if not response.success():
-            raise Exception(
-                f"client.im.v1.chat.create failed, code: {response.code}, msg: {response.msg}, log_id: {response.get_log_id()}"
-            )
+        ret = post_status(open_id, res_content)
+
+        if ret:
+            response = send_message(open_id, ret)
+
+            if not response.success():
+                raise Exception(
+                    f"client.im.v1.chat.create failed, code: {response.code}, msg: {response.msg}, log_id: {response.get_log_id()}"
+                )
     else:
         raise Exception(
             f"do_p2_im_message_receive_v1 chat_type error. current chat_type: {data.event.message.chat_type}"

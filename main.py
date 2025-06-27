@@ -4,16 +4,15 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from loguru import logger
 
+from cookbook.fanfou_api import get_access_token
 from cookbook.feishu_ws_manager import LarkWebSocketManager
 
 load_dotenv()
 lark_ws_manager = LarkWebSocketManager()
 
-from cookbook.fanfou_api import get_access_token
-
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(api: FastAPI):
     await life_start()
 
     yield
@@ -39,11 +38,6 @@ app = FastAPI(
 )
 
 
-@app.get("/")
-async def root():
-    return {"message": "Hello Cookbook!"}
-
-
 @app.get("/hello")
 async def hello():
     return {"message": "FastAPI Cookbook!"}
@@ -51,10 +45,7 @@ async def hello():
 
 @app.get("/auth")
 async def auth(request: Request, oauth_token: str):
-    logger.info(request)
-    full_url = str(request.url)  # 完整URL
-    logger.info(full_url)
-    logger.info(oauth_token)
+    logger.info(str(request.url))
 
     result = get_access_token(oauth_token)
     return {"message": result}
