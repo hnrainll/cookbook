@@ -165,6 +165,7 @@ def _log_request_to_json(response: requests.models.Response):
         }
 
         logger.info(json.dumps(data, indent=2))
+        logger.info(f"response.text = {response.text}")
         logger.info(f"response.json = {response.json()}")
     except Exception as e:
         logger.info(f"_log_request_to_json:{e}")
