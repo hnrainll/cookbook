@@ -59,7 +59,7 @@ def post_status(open_id: str, text: str):
         ff = Fanfou(
             consumer_key=os.getenv('FANFOU_CONSUMER_KEY'),
             consumer_secret=os.getenv('FANFOU_CONSUMER_SECRET'),
-            oauth_token=f"{token['oauth_token']}-fanfou",
+            oauth_token=token['oauth_token'],
             oauth_token_secret=token['oauth_token_secret']
         )
 
