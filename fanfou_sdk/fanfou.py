@@ -149,19 +149,22 @@ class Fanfou:
 
 
 def _log_request_to_json(response: requests.models.Response):
-    data = {
-        "request": {
-            "url": response.request.url,
-            "method": response.request.method,
-            "headers": dict(response.request.headers),  # 转换为普通字典
-            "body": response.request.body,
-        },
-        "response": {
-            "status_code": response.status_code,
-            "reason": response.reason,
-            "headers": dict(response.headers),
+    try:
+        data = {
+            "request": {
+                "url": response.request.url,
+                "method": response.request.method,
+                "headers": dict(response.request.headers),  # 转换为普通字典
+                "body": response.request.body,
+            },
+            "response": {
+                "status_code": response.status_code,
+                "reason": response.reason,
+                "headers": dict(response.headers),
+            }
         }
-    }
 
-    logger.info(json.dumps(data, indent=2))
-    logger.info(f"response.json = {response.json()}")
+        logger.info(json.dumps(data, indent=2))
+        logger.info(f"response.json = {response.json()}")
+    except Exception as e:
+        logger.info(f"_log_request_to_json:{e}")
