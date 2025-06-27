@@ -4,8 +4,8 @@ import lark_oapi as lark
 from lark_oapi.api.im.v1 import *
 from loguru import logger
 
-from cookbook.fanfou_api import gen_auth_url
-from cookbook.fanfou_api import post_status
+from fanshu.fanfou_api import gen_auth_url
+from fanshu.fanfou_api import post_status
 
 
 def send_message(open_id: str, chat_message: str) -> CreateMessageResponse:

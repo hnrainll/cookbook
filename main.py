@@ -4,8 +4,8 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from loguru import logger
 
-from cookbook.fanfou_api import get_access_token
-from cookbook.feishu_ws_manager import LarkWebSocketManager
+from fanshu.fanfou_api import get_access_token
+from fanshu.feishu_ws_manager import LarkWebSocketManager
 
 load_dotenv()
 lark_ws_manager = LarkWebSocketManager()

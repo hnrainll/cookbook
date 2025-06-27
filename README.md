@@ -48,7 +48,7 @@ uvicorn main:app --host 0.0.0.0 --port 8009 --reload --reload-dir .
 gunicorn main:app -w 1 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8009
 
 # 后台运行
-nohup gunicorn main:app -w 1 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8009 >> cookbook.log 2>&1 &
+nohup gunicorn main:app -w 1 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8009 >> fanshu.log 2>&1 &
 ```
 
 ## 注意事项

@@ -13,7 +13,7 @@ class LarkWebSocketManager:
         asyncio.set_event_loop(loop)
 
         try:
-            from cookbook.feishu_bot import lark_ws_client
+            from fanshu.feishu_bot import lark_ws_client
             lark_ws_client.start()
         except Exception as e:
             print(f"WebSocket客户端错误: {e}")
