@@ -3,6 +3,7 @@ import binascii
 import hashlib
 import hmac
 import random
+import string
 import time
 from urllib import parse
 
@@ -25,37 +26,65 @@ def _hmac_sha1_modern(base_string, key):
 
 
 def _normalized_url(url):
-    # scheme, netloc, path = parse.urlparse(url)[:3]
-    # return '{0}://{1}{2}'.format(scheme, netloc, path)
-
     parsed_url = parse.urlparse(url)
     base_url = f"{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}"
+    logger.info(f"base_url is [{base_url}]")
     return base_url
 
 
+def _escape(text):
+    return parse.quote(str(text), safe='')
+
+
+def _get_query(args):
+    sorted_params = sorted(args.items())
+    encoded_params = [f"{_escape(k)}={_escape(v)}" for k, v in sorted_params]
+
+    return "&".join(encoded_params)
+
+
+def _get_base_string(request, oauth_data):
+    query = parse.urlparse(request['url']).query
+
+    params = {}
+    for k, v in parse.parse_qs(query).items():
+        params[k] = v[0]
+
+    oauth_data.update(params)
+    oauth_data.update(request['data'])
+
+    base_elements = (request['method'].upper(), _normalized_url(request['url']), _get_query(oauth_data))
+    base_string = '&'.join(_escape(s) for s in base_elements)
+
+    logger.info(f"base_string is [{base_string}]")
+    return base_string
+
+
+def _get_signing_key(consumer_secret: str, token_secret: str= ''):
+    signing_key = f"{_escape(consumer_secret)}&{_escape(token_secret)}"
+
+    logger.info(f"signing_key is [{signing_key}]")
+    return signing_key
+
+
 class OAuth(object):
+
     def __init__(
         self,
         consumer_key,
         consumer_secret,
         parameter_seperator=', ',
-        realm='',
-        last_ampersand=True,
     ):
         self.consumer_key = consumer_key
         self.consumer_secret = consumer_secret
         self.parameter_seperator = parameter_seperator
-        self.realm = realm
-        self.last_ampersand = last_ampersand
 
     def gen_authorization(self, request: dict, token: dict=None):
         oauth_data = self._authorize(request, token)
         authorization =  self._get_authorization(oauth_data)
 
-        print(f"request is {request}")
-        print(f"token is {token}")
-        print(f"oauth_data is {oauth_data}")
-        print(f"authorization is [{authorization}]")
+        logger.info(f"oauth_data is [{oauth_data}]")
+        logger.info(f"authorization is [{authorization}]")
         return authorization
 
     def _authorize(self, request: dict, token: dict=None):
@@ -65,7 +94,8 @@ class OAuth(object):
             'oauth_consumer_key': self.consumer_key,
             'oauth_signature_method': 'HMAC-SHA1',
             'oauth_timestamp': str(int(time.time())),
-            'oauth_nonce': ''.join([str(random.randint(0, 9)) for _ in range(8)]),
+            # 'oauth_nonce': ''.join([str(random.randint(0, 9)) for _ in range(8)]),
+            'oauth_nonce': ''.join(random.choices(string.ascii_letters + string.digits, k=32)),
             'oauth_version':  '1.0'
         }
 
@@ -75,90 +105,23 @@ class OAuth(object):
         if 'data' not in request:
             request['data'] = {}
 
-        oauth_data['oauth_signature'] = self._get_signature(request, token.get('secret', ''), oauth_data)
+        oauth_data['oauth_signature'] = self._get_signature(request, oauth_data, token.get('secret', ''))
         return oauth_data
 
     def _get_authorization(self, oauth_data) -> str:
         parts = []
 
-        if self.realm != '':
-            parts.append(f'realm="{self.realm}"')
-
         for k, v in sorted(oauth_data.items()):
             if k.startswith(('oauth_', 'x_auth_')):
-                parts.append(f'{k}="{self._escape(v)}"')
+                parts.append(f'{_escape(k)}="{_escape(v)}"')
 
         return f'OAuth {self.parameter_seperator.join(parts)}'
 
-        # authorization = 'OAuth '
-        # if self.realm != '':
-        #     authorization += 'realm="%s"' % self.realm
-        #     authorization += self.parameter_seperator
-        #
-        # for k, v in sorted(oauth_data.items()):
-        #     if k.startswith('oauth_') or k.startswith('x_auth_'):
-        #         authorization += '%s="%s"%s' % (k, self._escape(v), self.parameter_seperator)
-        #
-        # return authorization[:-1]
 
-    def _get_signature(self, request, token_secret, oauth_data):
-        return _hmac_sha1_modern(self._get_base_string(request, oauth_data), self._get_signing_key(token_secret))
+    def _get_signature(self, request, oauth_data, token_secret):
+        base_string = _get_base_string(request, oauth_data)
+        key_string = _get_signing_key(self.consumer_secret, token_secret)
 
-    def _get_base_string(self, request, oauth_data):
-        logger.info(request)
-        logger.info(oauth_data)
+        return _hmac_sha1_modern(base_string, key_string)
 
-        query = parse.urlparse(request['url']).query
-
-        logger.info(query)
-
-        params = {}
-        for k, v in parse.parse_qs(query).items():
-            params[k] = v[0]
-
-        logger.info(params)
-
-        oauth_data.update(request['data'])
-        oauth_data.update(params)
-
-        logger.info(oauth_data)
-
-        base_elements = (request['method'].upper(), _normalized_url(request['url']), self._get_query(oauth_data))
-
-        logger.info(base_elements)
-
-        base_string = '&'.join(self._escape(s) for s in base_elements)
-
-        logger.info(f"_get_base_string is [{base_string}]")
-        return base_string
-
-    def _get_signing_key(self, token_secret=''):
-        if (self.last_ampersand == False) & (token_secret == ''):
-            return self._escape(self.consumer_secret)
-
-        return self._escape(self.consumer_secret) + '&' + self._escape(token_secret)
-
-    def _get_query(self, args, via='quote', safe='~'):
-        # 1. 排序参数
-        sorted_params = sorted(args.items())
-
-        # 2. URL 编码并拼接
-        encoded_params = []
-        for k, v in sorted_params:
-            encoded_params.append(f"{self._escape(str(k), via, safe)}={self._escape(str(v), via, safe)}")
-
-        return "&".join(encoded_params)
-
-        # return '&'.join('%s=%s' % (self._escape(str(k), via, safe), self._escape(str(v), via, safe)) for k, v in sorted(args.items()))
-
-    def _escape(self, s: str, via='quote', safe='~'):
-        # quote_via = getattr(parse, via)
-        #
-        # if isinstance(s, (int, float)):
-        #     s = str(s)
-        # if not isinstance(s, bytes):
-        #     s = s.encode('utf-8')
-        #
-        # return quote_via(s, safe=safe)
-        return parse.quote(s, safe=safe)
 
