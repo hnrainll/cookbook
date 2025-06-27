@@ -1,9 +1,8 @@
-# -*- coding: utf-8 -*-
-
+import json
 from urllib import parse
 
 import requests
-import json
+from loguru import logger
 
 from . import oauth
 
@@ -19,7 +18,7 @@ class Fanfou:
         password='',
         api_domain='api.fanfou.com',
         oauth_domain='fanfou.com',
-        protocol='http:',
+        protocol='http',
     ):
         self.consumer_key = consumer_key
         self.consumer_secret = consumer_secret
@@ -31,18 +30,18 @@ class Fanfou:
         self.oauth_domain = oauth_domain
         self.protocol = protocol
         self.o = oauth.OAuth(self.consumer_key, self.consumer_secret)
-        self.api_endpoint = self.protocol + '//' + self.api_domain
-        self.oauth_endpoint = self.protocol + '//' + self.oauth_domain
+        self.api_endpoint = self.protocol + '://' + self.api_domain
+        self.oauth_endpoint = self.protocol + '://' + self.oauth_domain
 
     def request_token(self):
         url = self.oauth_endpoint + '/oauth/request_token'
         authorization = self.o.gen_authorization({'url': url, 'method': 'GET'})
         r = requests.get(
             url,
-            headers={
-                'Authorization': authorization
-            }
+            headers={'Authorization': authorization}
         )
+
+        _log_request_to_json(r)
 
         if r.status_code != 200:
             return None, r
@@ -61,10 +60,10 @@ class Fanfou:
 
         r = requests.get(
             url,
-            headers={
-                'Authorization': authorization
-            }
+            headers={'Authorization': authorization}
         )
+
+        _log_request_to_json(r)
 
         if r.status_code != 200:
             return None, r
@@ -99,10 +98,13 @@ class Fanfou:
         self.oauth_token_secret = token['oauth_token_secret'][0]
         return {'oauth_token': self.oauth_token, 'oauth_token_secret': self.oauth_token_secret}, r
 
-    def get(self, uri, params={}):
+    def get(self, uri, params=None):
+        params = params or {}
+
         url = self.api_endpoint + uri + '.json'
         if bool(params):
             url += '?%s' % parse.urlencode(params)
+
         token = {'key': self.oauth_token, 'secret': self.oauth_token_secret}
         authorization = self.o.gen_authorization({'url': url, 'method': 'GET'}, token=token)
         r = requests.get(
@@ -113,37 +115,53 @@ class Fanfou:
             }
         )
 
+        _log_request_to_json(r)
+
         if r.status_code != 200:
             return None, r
         return r.json(), r
 
-    def post(self, uri, params={}, files=None):
-        url = self.api_endpoint + uri + '.json'
-        token = {'key': self.oauth_token, 'secret': self.oauth_token_secret}
-        is_upload = uri in ['/photos/upload', '/account/update_profile_image']
+    def post(self, uri: str, params: dict=None):
+        params = params or {}
+        url = f"{self.api_endpoint}{uri}.json"
+
         authorization = self.o.gen_authorization(
-            {'url': url, 'method': 'POST', 'data': {} if is_upload else params},
-            token)
+            {'url': url, 'method': 'POST', 'data': params},
+            {'key': self.oauth_token, 'secret': self.oauth_token_secret}
+        )
 
         headers = {
             'Authorization': authorization,
             'Content-Type': 'application/x-www-form-urlencoded'
         }
 
-        if is_upload:
-            del headers['Content-Type']
-
         r = requests.post(
             url,
             headers=headers,
-            data=params,
-            files=files
+            data=params
         )
 
-        print(r.request)
-        print(r.request.headers)
-        print(r.request.body)
+        _log_request_to_json(r)
 
         if r.status_code != 200:
             return None, r
         return r.json(), r
+
+
+def _log_request_to_json(response: requests.models.Response):
+    data = {
+        "request": {
+            "url": response.request.url,
+            "method": response.request.method,
+            "headers": dict(response.request.headers),  # 转换为普通字典
+            "body": response.request.body,
+        },
+        "response": {
+            "status_code": response.status_code,
+            "reason": response.reason,
+            "headers": dict(response.headers),
+        }
+    }
+
+    logger.info(json.dumps(data, indent=2))
+    logger.info(f"response.json = {response.json()}")

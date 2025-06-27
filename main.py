@@ -45,8 +45,6 @@ async def hello():
 
 @app.get("/auth")
 async def auth(request: Request, oauth_token: str):
-    logger.info(str(request.url))
-
     result = get_access_token(oauth_token)
     return {"message": result}
 

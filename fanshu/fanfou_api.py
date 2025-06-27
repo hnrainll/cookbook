@@ -11,9 +11,8 @@ def gen_auth_url(open_id: str):
         consumer_secret=os.getenv('FANFOU_CONSUMER_SECRET')
     )
 
-    token, response = ff.request_token()
+    token, _ = ff.request_token()
     logger.info(token)
-    logger.info(response)
 
     _save_request_token(ff.oauth_token, token, open_id)
 
@@ -52,10 +51,6 @@ def post_status(open_id: str, text: str):
     if user_token:
         token = user_token['token']
 
-        logger.info(token)
-        logger.info(token['oauth_token'])
-        logger.info(token['oauth_token_secret'])
-
         ff = Fanfou(
             consumer_key=os.getenv('FANFOU_CONSUMER_KEY'),
             consumer_secret=os.getenv('FANFOU_CONSUMER_SECRET'),
@@ -71,14 +66,7 @@ def post_status(open_id: str, text: str):
         # print(tl)
 
         st, response = ff.post('/statuses/update', content)
-        logger.info(type(st))
-        logger.info(st)
-        logger.info(response.status_code)
-        logger.info(response.reason)
-        logger.info(response.ok)
-        logger.info(json.loads(response.text))
-        logger.info(response.content)
-        logger.info(response.headers)
+
     return st
 
 
