@@ -42,13 +42,13 @@ FANFOU_CONSUMER_SECRET=your_consumer_secret
 
 ```bash
 # 本地测试
-uvicorn main:app --host 0.0.0.0 --port 8009 --reload --reload-dir .
+uvicorn fanshu.main:app --host 0.0.0.0 --port 8009 --reload --reload-dir .
 
 # 线上部署
-gunicorn main:app -w 1 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8009
+gunicorn fanshu.main:app -w 1 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8009
 
 # 后台运行
-nohup gunicorn main:app -w 1 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8009 >> fanshu.log 2>&1 &
+nohup gunicorn fanshu.main:app -w 1 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8009 >> fanshu.log 2>&1 &
 ```
 
 ## 注意事项

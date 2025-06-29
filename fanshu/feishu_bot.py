@@ -75,19 +75,22 @@ def do_p2_im_message_receive_v1(data: P2ImMessageReceiveV1) -> None:
     logger.info(open_id)
     logger.info(res_content)
     if data.event.message.chat_type == "p2p":
-
         ret = post_status(open_id, res_content)
 
+        logger.info(type(ret))
+        logger.info(ret)
+
         if ret:
-            response = send_message(open_id, ret)
+            response = send_message(open_id, '发送成功')
 
             if not response.success():
-                raise Exception(
-                    f"client.im.v1.chat.create failed, code: {response.code}, msg: {response.msg}, log_id: {response.get_log_id()}"
+                send_message(
+                    open_id,
+                    f"发送饭否失败, code: {response.code}, msg: {response.msg}, log_id: {response.get_log_id()}"
                 )
     else:
-        raise Exception(
-            f"do_p2_im_message_receive_v1 chat_type error. current chat_type: {data.event.message.chat_type}"
+        send_message(open_id,
+            f"当前飞书消息类型不支持. current chat_type: {data.event.message.chat_type}"
         )
 
 
