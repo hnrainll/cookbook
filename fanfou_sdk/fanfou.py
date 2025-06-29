@@ -32,6 +32,7 @@ class Fanfou:
         self.o = oauth.OAuth(self.consumer_key, self.consumer_secret)
         self.api_endpoint = self.protocol + '://' + self.api_domain
         self.oauth_endpoint = self.protocol + '://' + self.oauth_domain
+        self.access_oauth_token = {'key': self.oauth_token, 'secret': self.oauth_token_secret}
 
     def request_token(self):
         url = self.oauth_endpoint + '/oauth/request_token'
@@ -105,8 +106,7 @@ class Fanfou:
         if bool(params):
             url += '?%s' % parse.urlencode(params)
 
-        token = {'key': self.oauth_token, 'secret': self.oauth_token_secret}
-        authorization = self.o.gen_authorization({'url': url, 'method': 'GET'}, token=token)
+        authorization = self.o.gen_authorization({'url': url, 'method': 'GET'}, self.access_oauth_token)
         r = requests.get(
             url,
             headers={
@@ -127,12 +127,12 @@ class Fanfou:
 
         authorization = self.o.gen_authorization(
             {'url': url, 'method': 'POST', 'data': params},
-            {'key': self.oauth_token, 'secret': self.oauth_token_secret}
+            self.access_oauth_token
         )
 
         headers = {
             'Authorization': authorization,
-            'Content-Type': 'application/x-www-form-urlencoded'
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
         }
 
         r = requests.post(

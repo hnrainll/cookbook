@@ -73,7 +73,7 @@ class OAuth(object):
         self,
         consumer_key,
         consumer_secret,
-        parameter_seperator=', ',
+        parameter_seperator=',',
     ):
         self.consumer_key = consumer_key
         self.consumer_secret = consumer_secret
