@@ -62,9 +62,6 @@ def post_status(open_id: str, text: str):
             'status': text
         }
 
-        # tl, _ = ff.get('/statuses/home_timeline')
-        # print(tl)
-
         st, response = ff.post('/statuses/update', content)
 
     return st

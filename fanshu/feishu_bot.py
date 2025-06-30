@@ -1,4 +1,5 @@
 import json
+from collections import OrderedDict
 
 import lark_oapi as lark
 from lark_oapi.api.im.v1 import *
@@ -6,6 +7,27 @@ from loguru import logger
 
 from fanshu.fanfou_api import gen_auth_url
 from fanshu.fanfou_api import post_status
+
+
+class OrderedDictDeduplicator:
+
+    def __init__(self, max_size: int = 100):
+        self.max_size = max_size
+        self.messages = OrderedDict()  # 既有序又支持快速查找
+
+    def add(self, message_id: str) -> bool:
+        if message_id in self.messages:
+            return False
+
+        # 超出限制时删除最旧的
+        if len(self.messages) >= self.max_size:
+            self.messages.popitem(last=False)  # 删除最旧的
+
+        self.messages[message_id] = True
+        return True
+
+    def exists(self, message_id: str) -> bool:
+        return message_id in self.messages
 
 
 def send_message(open_id: str, chat_message: str) -> CreateMessageResponse:
@@ -64,33 +86,32 @@ def reply_message(message_id: str, content: str) -> ReplyMessageResponse:
 def do_p2_im_message_receive_v1(data: P2ImMessageReceiveV1) -> None:
     logger.info(f'[ do_p2_im_message_receive_v1 access ], data: {lark.JSON.marshal(data, indent=4)}')
 
-    if data.event.message.message_type == "text":
-        res_content = json.loads(data.event.message.content)["text"]
-    else:
-        res_content = "解析消息失败，请发送文本消息\nparse message failed, please send text message"
-
-    content = f"收到你发送的消息：{res_content}\nReceived message: {res_content}"
-
     open_id = data.event.sender.sender_id.open_id
-    logger.info(open_id)
-    logger.info(res_content)
-    if data.event.message.chat_type == "p2p":
-        ret = post_status(open_id, res_content)
+    message_type = data.event.message.message_type
+    message_id = data.event.message.message_id
+    # data.event.message.chat_type == "p2p":
 
-        logger.info(ret)
+    if dedup.exists(message_id):
+        dup_message = f"这条消息为重复消息: {message_id}"
+        logger.debug(dup_message)
+        send_message(open_id, dup_message)
+        return
 
+    if message_type == "text":
+        content = json.loads(data.event.message.content)["text"]
+        logger.info(content)
+        # TODO：需要对消息长度做限制。
+
+        ret = post_status(open_id, content)
         if ret:
-            response = send_message(open_id, '发送成功')
+            logger.info(json.dumps(ret))
 
-            if not response.success():
-                send_message(
-                    open_id,
-                    f"发送饭否失败, code: {response.code}, msg: {response.msg}, log_id: {response.get_log_id()}"
-                )
+            dedup.add(message_id)
+            send_message(open_id, "发送饭否成功")
+        else:
+            send_message(open_id,"发送饭否失败")
     else:
-        send_message(open_id,
-            f"当前飞书消息类型不支持. current chat_type: {data.event.message.chat_type}"
-        )
+        send_message(open_id,f"当前饭薯不支持该消息类型. message_type: {message_type}")
 
 
 def do_p2_application_bot_menu_v6(data: lark.application.v6.P2ApplicationBotMenuV6) -> None:
@@ -128,3 +149,5 @@ lark_ws_client = lark.ws.Client(
     event_handler=event_handler,
     log_level=lark.LogLevel.DEBUG,
 )
+
+dedup = OrderedDictDeduplicator()
