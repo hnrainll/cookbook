@@ -44,10 +44,9 @@ def get_access_token(oauth_token: str):
 
 
 def post_status(open_id: str, text: str):
+    ret = None
     user_token = _load_token(open_id)
-    logger.info(user_token)
 
-    st = None
     if user_token:
         token = user_token['token']
 
@@ -62,9 +61,9 @@ def post_status(open_id: str, text: str):
             'status': text
         }
 
-        st, response = ff.post('/statuses/update', content)
+        ret, response = ff.post('/statuses/update', content)
 
-    return st
+    return ret
 
 
 def _save_request_token(oauth_token: str, token: dict, open_id: str):

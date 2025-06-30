@@ -23,7 +23,6 @@ def _hmac_sha1_modern(base_string, key):
 def _normalized_url(url):
     parsed_url = parse.urlparse(url)
     base_url = f"{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}"
-    logger.info(f"base_url is [{base_url}]")
     return base_url
 
 

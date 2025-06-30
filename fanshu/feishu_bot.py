@@ -58,8 +58,12 @@ def send_message(open_id: str, chat_message: str) -> CreateMessageResponse:
     return response
 
 
-def reply_message(message_id: str, content: str) -> ReplyMessageResponse:
-    # data.event.message.message_id
+def reply_message(message_id: str, chat_message: str) -> ReplyMessageResponse:
+    content = json.dumps(
+        {
+            "text": chat_message
+        }
+    )
 
     request: ReplyMessageRequest = (
         ReplyMessageRequest.builder()
@@ -92,9 +96,7 @@ def do_p2_im_message_receive_v1(data: P2ImMessageReceiveV1) -> None:
     # data.event.message.chat_type == "p2p":
 
     if dedup.exists(message_id):
-        dup_message = f"这条消息为重复消息: {message_id}"
-        logger.debug(dup_message)
-        send_message(open_id, dup_message)
+        logger.debug(f"这条消息为重复消息: {message_id}")
         return
 
     if message_type == "text":
@@ -104,12 +106,12 @@ def do_p2_im_message_receive_v1(data: P2ImMessageReceiveV1) -> None:
 
         ret = post_status(open_id, content)
         if ret:
-            logger.info(json.dumps(ret))
+            logger.info(json.dumps(ret, indent=2))
 
             dedup.add(message_id)
-            send_message(open_id, "发送饭否成功")
+            reply_message(message_id, f"发送饭否成功\n\nhttps://fanfou.com/statuses/{ret['id']}")
         else:
-            send_message(open_id,"发送饭否失败")
+            reply_message(message_id,"发送饭否失败")
     else:
         send_message(open_id,f"当前饭薯不支持该消息类型. message_type: {message_type}")
 
