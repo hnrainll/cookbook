@@ -56,3 +56,7 @@ nohup gunicorn fanshu.main:app -w 1 -k uvicorn.workers.UvicornWorker --bind 0.0.
 - 请确保所有必要的环境变量都已正确配置
 - 保护好你的 API 密钥和令牌，不要泄露给他人
 - 建议将 `.env` 文件添加到 `.gitignore` 中 
+
+## 感谢
+- [https://github.com/LitoMore/fanfou-sdk-python](https://github.com/LitoMore/fanfou-sdk-python)
+- [https://github.com/fanfoujs/nofan](https://github.com/fanfoujs/nofan)

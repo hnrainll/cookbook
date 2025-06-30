@@ -8,6 +8,7 @@ from . import oauth
 
 
 class Fanfou:
+
     def __init__(
         self,
         consumer_key='',
@@ -42,8 +43,6 @@ class Fanfou:
             headers={'Authorization': authorization}
         )
 
-        _log_request_to_json(r)
-
         if r.status_code != 200:
             return None, r
 
@@ -64,8 +63,6 @@ class Fanfou:
             headers={'Authorization': authorization}
         )
 
-        _log_request_to_json(r)
-
         if r.status_code != 200:
             return None, r
 
@@ -82,6 +79,7 @@ class Fanfou:
             'x_auth_username': self.username
         }
         authorization = self.o.gen_authorization({'url': url, 'method': 'POST'})
+
         r = requests.post(
             url,
             headers={
@@ -101,8 +99,8 @@ class Fanfou:
 
     def get(self, uri, params=None):
         params = params or {}
-
         url = self.api_endpoint + uri + '.json'
+
         if bool(params):
             url += '?%s' % parse.urlencode(params)
 
@@ -114,8 +112,6 @@ class Fanfou:
                 'Content-Type': 'application/x-www-form-urlencoded'
             }
         )
-
-        _log_request_to_json(r)
 
         if r.status_code != 200:
             return None, r
@@ -145,6 +141,7 @@ class Fanfou:
 
         if r.status_code != 200:
             return None, r
+
         return r.json(), r
 
 

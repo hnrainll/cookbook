@@ -10,11 +10,6 @@ from urllib import parse
 from loguru import logger
 
 
-def _hmacsha1(base_string, key):
-    hmac_hash = hmac.new(key.encode(), base_string.encode(), hashlib.sha1)
-    return binascii.b2a_base64(hmac_hash.digest())[:-1]
-
-
 def _hmac_sha1_modern(base_string, key):
     """现代化版本的 HMAC-SHA1 签名生成"""
     hmac_hash = hmac.new(
@@ -55,15 +50,11 @@ def _get_base_string(request, oauth_data):
 
     base_elements = (request['method'].upper(), _normalized_url(request['url']), _get_query(oauth_data))
     base_string = '&'.join(_escape(s) for s in base_elements)
-
-    logger.info(f"base_string is [{base_string}]")
     return base_string
 
 
 def _get_signing_key(consumer_secret: str, token_secret: str= ''):
     signing_key = f"{_escape(consumer_secret)}&{_escape(token_secret)}"
-
-    logger.info(f"signing_key is [{signing_key}]")
     return signing_key
 
 
@@ -83,8 +74,6 @@ class OAuth(object):
         oauth_data = self._authorize(request, token)
         authorization =  self._get_authorization(oauth_data)
 
-        logger.info(f"oauth_data is [{oauth_data}]")
-        logger.info(f"authorization is [{authorization}]")
         return authorization
 
     def _authorize(self, request: dict, token: dict=None):
@@ -94,7 +83,6 @@ class OAuth(object):
             'oauth_consumer_key': self.consumer_key,
             'oauth_signature_method': 'HMAC-SHA1',
             'oauth_timestamp': str(int(time.time())),
-            # 'oauth_nonce': ''.join([str(random.randint(0, 9)) for _ in range(8)]),
             'oauth_nonce': ''.join(random.choices(string.ascii_letters + string.digits, k=32)),
             'oauth_version':  '1.0'
         }

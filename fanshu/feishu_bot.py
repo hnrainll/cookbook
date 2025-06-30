@@ -77,7 +77,6 @@ def do_p2_im_message_receive_v1(data: P2ImMessageReceiveV1) -> None:
     if data.event.message.chat_type == "p2p":
         ret = post_status(open_id, res_content)
 
-        logger.info(type(ret))
         logger.info(ret)
 
         if ret:
