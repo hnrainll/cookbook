@@ -20,19 +20,21 @@ uv sync
 
 ```
 # 飞书机器人配置
-FEISHU_WEBHOOK=your_feishu_webhook_url
+BASE_DOMAIN=https://open.feishu.cn
+APP_ID=your_app_id
+APP_SECRET=your_app_secret
 
 # 饭否API配置
 FANFOU_CONSUMER_KEY=your_consumer_key
 FANFOU_CONSUMER_SECRET=your_consumer_secret
 ```
 
-2. 获取飞书机器人 Webhook：
+2. 创建飞书机器人
    - 在飞书开放平台创建机器人
-   - 获取机器人的 Webhook URL
+   - 使用长链接的形式交互
 
 3. 获取饭否 API 密钥：
-   - 在饭否开放平台注册应用
+   - 在饭否开放平台注册应用（饭否已经不审核新注册应用，故申请的应用也无法使用）
    - 获取 Consumer Key 和 Consumer Secret
    - 获取 Access Token 和 Access Token Secret
 
