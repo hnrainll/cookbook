@@ -38,9 +38,9 @@ def get_access_token(oauth_token: str):
 
         if token:
             _save_user_token(open_id, token)
-            return "授权成功"
+            return "授权成功", open_id
 
-    return "授权失败"
+    return "授权失败", None
 
 
 def post_status(open_id: str, text: str):

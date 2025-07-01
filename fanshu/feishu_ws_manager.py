@@ -29,3 +29,8 @@ class LarkWebSocketManager:
     def stop(self):
         """停止WebSocket客户端"""
         self._stop_event.set()
+
+    @staticmethod
+    def post_message(open_id: str, message: str):
+        from fanshu.feishu_bot import send_message
+        send_message(open_id, message)

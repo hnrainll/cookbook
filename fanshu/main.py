@@ -45,7 +45,10 @@ async def hello():
 
 @app.get("/auth")
 async def auth(request: Request, oauth_token: str):
-    result = get_access_token(oauth_token)
+    result, open_id = get_access_token(oauth_token)
+
+    if open_id:
+        lark_ws_manager.post_message(open_id, result)
     return {"message": result}
 
 

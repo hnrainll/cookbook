@@ -30,10 +30,10 @@ class OrderedDictDeduplicator:
         return message_id in self.messages
 
 
-def send_message(open_id: str, chat_message: str) -> CreateMessageResponse:
+def send_message(open_id: str, text: str) -> CreateMessageResponse:
     content = json.dumps(
         {
-            "text": chat_message
+            "text": text
         }
     )
 
@@ -115,22 +115,6 @@ def do_p2_im_message_receive_v1(data: P2ImMessageReceiveV1) -> None:
         send_message(open_id,f"当前饭薯不支持该消息类型. message_type: {message_type}")
 
 
-def do_p2_application_bot_menu_v6(data: lark.application.v6.P2ApplicationBotMenuV6) -> None:
-    logger.info(f'[ do_p2_application_bot_menu_v6 access ], data: {lark.JSON.marshal(data, indent=4)}')
-
-    event_key = data.event.event_key
-    open_id = data.event.operator.operator_id.open_id
-
-    if event_key == 'login':
-        url = gen_auth_url(open_id)
-
-        response = send_message(open_id, f"请点击如下链接并授权登录。\n{url}")
-        if not response.success():
-            raise Exception(
-                f"client.im.v1.chat.create failed, code: {response.code}, msg: {response.msg}, log_id: {response.get_log_id()}"
-            )
-
-
 def login(open_id):
     url = gen_auth_url(open_id)
 
@@ -157,7 +141,6 @@ def post_message(open_id, message_id, content):
 event_handler = (
     lark.EventDispatcherHandler.builder("", "")
     .register_p2_im_message_receive_v1(do_p2_im_message_receive_v1)
-    .register_p2_application_bot_menu_v6(do_p2_application_bot_menu_v6)
     .build()
 )
 
