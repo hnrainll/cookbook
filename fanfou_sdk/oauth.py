@@ -1,13 +1,10 @@
 import base64
-import binascii
 import hashlib
 import hmac
 import random
 import string
 import time
 from urllib import parse
-
-from loguru import logger
 
 
 def _hmac_sha1_modern(base_string, key):

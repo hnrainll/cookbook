@@ -101,17 +101,16 @@ def do_p2_im_message_receive_v1(data: P2ImMessageReceiveV1) -> None:
 
     if message_type == "text":
         content = json.loads(data.event.message.content)["text"]
+
         logger.info(content)
         # TODO：需要对消息长度做限制。
 
-        ret = post_status(open_id, content)
-        if ret:
-            logger.info(json.dumps(ret, indent=2))
-
-            dedup.add(message_id)
-            reply_message(message_id, f"发送饭否成功\n\nhttps://fanfou.com/statuses/{ret['id']}")
+        if content == '/login':
+            login(open_id)
+        elif content == '/logout':
+            logout(open_id)
         else:
-            reply_message(message_id,"发送饭否失败")
+            post_message(open_id, message_id, content)
     else:
         send_message(open_id,f"当前饭薯不支持该消息类型. message_type: {message_type}")
 
@@ -130,6 +129,27 @@ def do_p2_application_bot_menu_v6(data: lark.application.v6.P2ApplicationBotMenu
             raise Exception(
                 f"client.im.v1.chat.create failed, code: {response.code}, msg: {response.msg}, log_id: {response.get_log_id()}"
             )
+
+
+def login(open_id):
+    url = gen_auth_url(open_id)
+
+    send_message(open_id, f"请点击如下链接并授权登录。\n{url}")
+
+
+def logout(open_id):
+    pass
+
+
+def post_message(open_id, message_id, content):
+    ret = post_status(open_id, content)
+    if ret:
+        logger.info(json.dumps(ret, indent=2))
+
+        dedup.add(message_id)
+        reply_message(message_id, f"消息发送成功\n\nhttps://fanfou.com/statuses/{ret['id']}")
+    else:
+        reply_message(message_id, "消息发送失败")
 
 
 # 注册事件回调
