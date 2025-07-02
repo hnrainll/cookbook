@@ -12,20 +12,15 @@ def gen_auth_url(open_id: str):
     )
 
     token, _ = ff.request_token()
-    logger.info(token)
-
     _save_request_token(ff.oauth_token, token, open_id)
 
     oauth_callback = os.getenv('FANFOU_OAUTH_CALLBACK')
     url = f"https://fanfou.com/oauth/authorize?oauth_token={ff.oauth_token}&oauth_callback={oauth_callback}"
-
-    logger.info(url)
     return url
 
 
 def get_access_token(oauth_token: str):
     request_token = _load_token(oauth_token)
-    logger.info(request_token)
 
     if request_token:
         ff = Fanfou(
@@ -35,8 +30,6 @@ def get_access_token(oauth_token: str):
 
         open_id = request_token['open_id']
         token, response = ff.access_token(request_token['token'])
-        logger.info(token)
-        logger.info(response)
 
         remove_token(oauth_token)
         if token:
@@ -79,7 +72,7 @@ def remove_token(open_id: str) -> bool:
             ret = True
             logger.info(f"文件 {file_path} 已成功删除")
         except Exception as e:
-            logger.warning(f"删除文件{file_path}失败：{e}")
+            logger.warning(f"删除文件 {file_path} 失败：{e}")
     else:
         logger.info(f"文件 {file_path} 不存在或不是文件")
     return ret
