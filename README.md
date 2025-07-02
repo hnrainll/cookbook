@@ -27,6 +27,7 @@ APP_SECRET=your_app_secret
 # 饭否API配置
 FANFOU_CONSUMER_KEY=your_consumer_key
 FANFOU_CONSUMER_SECRET=your_consumer_secret
+FANFOU_OAUTH_CALLBACK=your_oauth_callback
 ```
 
 2. 创建飞书机器人

@@ -16,7 +16,9 @@ def gen_auth_url(open_id: str):
 
     _save_request_token(ff.oauth_token, token, open_id)
 
-    url = f"https://fanfou.com/oauth/authorize?oauth_token={ff.oauth_token}&oauth_callback=https://wenhao.ink/fanshu/auth"
+    oauth_callback = os.getenv('FANFOU_OAUTH_CALLBACK')
+    url = f"https://fanfou.com/oauth/authorize?oauth_token={ff.oauth_token}&oauth_callback={oauth_callback}"
+
     logger.info(url)
     return url
 
@@ -36,6 +38,7 @@ def get_access_token(oauth_token: str):
         logger.info(token)
         logger.info(response)
 
+        remove_token(oauth_token)
         if token:
             _save_user_token(open_id, token)
             return "授权成功", open_id
@@ -63,6 +66,22 @@ def post_status(open_id: str, text: str):
 
         ret, response = ff.post('/statuses/update', content)
 
+    return ret
+
+
+def remove_token(open_id: str) -> bool:
+    file_path = open_id
+
+    ret = False
+    if os.path.exists(file_path) and os.path.isfile(file_path):
+        try:
+            os.remove(file_path)
+            ret = True
+            logger.info(f"文件 {file_path} 已成功删除")
+        except Exception as e:
+            logger.warning(f"删除文件{file_path}失败：{e}")
+    else:
+        logger.info(f"文件 {file_path} 不存在或不是文件")
     return ret
 
 

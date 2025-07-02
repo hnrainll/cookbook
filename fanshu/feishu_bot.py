@@ -7,6 +7,7 @@ from loguru import logger
 
 from fanshu.fanfou_api import gen_auth_url
 from fanshu.fanfou_api import post_status
+from fanshu.fanfou_api import remove_token
 
 
 class OrderedDictDeduplicator:
@@ -117,12 +118,16 @@ def do_p2_im_message_receive_v1(data: P2ImMessageReceiveV1) -> None:
 
 def login(open_id):
     url = gen_auth_url(open_id)
-
     send_message(open_id, f"请点击如下链接并授权登录。\n{url}")
 
 
 def logout(open_id):
-    pass
+    ret = remove_token(open_id)
+    if ret:
+        send_message(open_id, "登出成功")
+    else:
+        send_message(open_id, "登出失败")
+
 
 
 def post_message(open_id, message_id, content):
