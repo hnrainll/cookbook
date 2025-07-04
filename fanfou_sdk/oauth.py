@@ -105,7 +105,4 @@ class OAuth(object):
     def _get_signature(self, request, oauth_data, token_secret):
         base_string = _get_base_string(request, oauth_data)
         key_string = _get_signing_key(self.consumer_secret, token_secret)
-
         return _hmac_sha1_modern(base_string, key_string)
-
-

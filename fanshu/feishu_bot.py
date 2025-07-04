@@ -53,14 +53,13 @@ def send_message(open_id: str, text: str) -> CreateMessageResponse:
     # Use send OpenAPI to send messages
     # https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/im-v1/message/create
     response: CreateMessageResponse = client.im.v1.message.create(request)
-
     return response
 
 
-def reply_message(message_id: str, chat_message: str) -> ReplyMessageResponse:
+def reply_message(message_id: str, text: str) -> ReplyMessageResponse:
     content = json.dumps(
         {
-            "text": chat_message
+            "text": text
         }
     )
 
@@ -79,7 +78,6 @@ def reply_message(message_id: str, chat_message: str) -> ReplyMessageResponse:
     # Reply to messages using send OpenAPI
     # https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/im-v1/message/reply
     response: ReplyMessageResponse = client.im.v1.message.reply(request)
-
     return response
 
 
@@ -111,7 +109,7 @@ def do_p2_im_message_receive_v1(data: P2ImMessageReceiveV1) -> None:
         elif content == '/logout':
             fanfou_logout(open_id)
         else:
-            post_fanfou_text(open_id, message_id, content)
+            fanfou_post_text(open_id, message_id, content)
     else:
         send_message(open_id,f"当前饭薯不支持该消息类型. message_type: {message_type}")
 
@@ -129,7 +127,7 @@ def fanfou_logout(open_id):
         send_message(open_id, "登出失败")
 
 
-def post_fanfou_text(open_id, message_id, content):
+def fanfou_post_text(open_id, message_id, content):
     ret = fanfou_api.post_text(open_id, content)
     if ret:
         logger.info(json.dumps(ret, indent=2))
@@ -152,6 +150,7 @@ event_handler = (
 # 创建 LarkClient 对象，用于请求OpenAPI, 并创建 LarkWSClient 对象，用于使用长连接接收事件。
 # Create LarkClient object for requesting OpenAPI, and create LarkWSClient object for receiving events using long connection.
 client = lark.Client.builder().app_id(lark.APP_ID).app_secret(lark.APP_SECRET).build()
+
 lark_ws_client = lark.ws.Client(
     lark.APP_ID,
     lark.APP_SECRET,

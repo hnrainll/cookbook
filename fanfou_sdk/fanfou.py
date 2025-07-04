@@ -1,8 +1,6 @@
-import json
 from urllib import parse
 
 import requests
-from loguru import logger
 
 from . import oauth
 
@@ -137,32 +135,7 @@ class Fanfou:
             data=params
         )
 
-        _log_request_to_json(r)
-
         if r.status_code != 200:
             return None, r
 
         return r.json(), r
-
-
-def _log_request_to_json(response: requests.models.Response):
-    try:
-        data = {
-            "request": {
-                "url": response.request.url,
-                "method": response.request.method,
-                "headers": dict(response.request.headers),  # 转换为普通字典
-                "body": response.request.body,
-            },
-            "response": {
-                "status_code": response.status_code,
-                "reason": response.reason,
-                "headers": dict(response.headers),
-            }
-        }
-
-        logger.info(json.dumps(data, indent=2))
-        logger.info(f"response.text = {response.text}")
-        logger.info(f"response.json = {response.json()}")
-    except Exception as e:
-        logger.info(f"_log_request_to_json:{e}")
