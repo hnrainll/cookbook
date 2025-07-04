@@ -5,9 +5,7 @@ import lark_oapi as lark
 from lark_oapi.api.im.v1 import *
 from loguru import logger
 
-from fanshu.fanfou_api import gen_auth_url
-from fanshu.fanfou_api import post_status
-from fanshu.fanfou_api import remove_token
+from fanshu import fanfou_api
 
 
 class OrderedDictDeduplicator:
@@ -102,36 +100,37 @@ def do_p2_im_message_receive_v1(data: P2ImMessageReceiveV1) -> None:
 
     if message_type == "text":
         content = json.loads(data.event.message.content)["text"]
-
         logger.info(content)
-        # TODO：需要对消息长度做限制。
+        
+        if len(content) > 140:
+            reply_message(message_id, "消息长度大于140，无法发送。")
+            return
 
         if content == '/login':
-            login(open_id)
+            fanfou_login(open_id)
         elif content == '/logout':
-            logout(open_id)
+            fanfou_logout(open_id)
         else:
-            post_message(open_id, message_id, content)
+            post_fanfou_text(open_id, message_id, content)
     else:
         send_message(open_id,f"当前饭薯不支持该消息类型. message_type: {message_type}")
 
 
-def login(open_id):
-    url = gen_auth_url(open_id)
+def fanfou_login(open_id):
+    url = fanfou_api.gen_auth_url(open_id)
     send_message(open_id, f"请点击如下链接并授权登录。\n{url}")
 
 
-def logout(open_id):
-    ret = remove_token(open_id)
+def fanfou_logout(open_id):
+    ret = fanfou_api.remove_token(open_id)
     if ret:
         send_message(open_id, "登出成功")
     else:
         send_message(open_id, "登出失败")
 
 
-
-def post_message(open_id, message_id, content):
-    ret = post_status(open_id, content)
+def post_fanfou_text(open_id, message_id, content):
+    ret = fanfou_api.post_text(open_id, content)
     if ret:
         logger.info(json.dumps(ret, indent=2))
 

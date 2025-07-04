@@ -39,7 +39,7 @@ def get_access_token(oauth_token: str):
     return "授权失败", None
 
 
-def post_status(open_id: str, text: str):
+def post_text(open_id: str, text: str):
     ret = None
     user_token = _load_token(open_id)
 
