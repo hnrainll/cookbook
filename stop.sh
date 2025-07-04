@@ -6,7 +6,7 @@ PIDS=$(ps aux | grep "gunicorn fanshu.main:app" | grep -v grep | awk '{print $2}
 if [ -z "$PIDS" ]; then
   echo "fanshu 项目未运行或未找到其进程。"
 else
-  echo "正在停止 fanshu 项目 (PIDs: $PIDS)..."
+  echo "正在停止 fanshu 项目 (PIDs: $PIDS)..." | tr '\n' ' '
   echo "$PIDS" | xargs kill
   echo "fanshu 项目已停止。"
 fi
