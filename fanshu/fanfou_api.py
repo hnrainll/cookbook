@@ -62,6 +62,29 @@ def post_text(open_id: str, text: str):
     return ret
 
 
+def post_photo(open_id: str, text: str, image_data: bytes):
+    ret = None
+    user_token = _load_token(open_id)
+
+    if user_token:
+        token = user_token['token']
+
+        ff = Fanfou(
+            consumer_key=os.getenv('FANFOU_CONSUMER_KEY'),
+            consumer_secret=os.getenv('FANFOU_CONSUMER_SECRET'),
+            oauth_token=token['oauth_token'],
+            oauth_token_secret=token['oauth_token_secret']
+        )
+
+        content = {
+            'status': text
+        }
+
+        ret, response = ff.post_photo('/photos/upload', content, image_data)
+
+    return ret
+
+
 def remove_token(open_id: str) -> bool:
     file_path = open_id
 

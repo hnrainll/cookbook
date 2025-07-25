@@ -115,6 +115,35 @@ class Fanfou:
             return None, r
         return r.json(), r
 
+    def post_photo(self, uri: str, params: dict=None, image_data: bytes=None):
+        params = params or {}
+        url = f"{self.api_endpoint}{uri}.json"
+
+        authorization = self.o.gen_authorization(
+            {'url': url, 'method': 'POST', 'data': params},
+            self.access_oauth_token
+        )
+
+        headers = {
+            'Authorization': authorization,
+        }
+
+        files = None
+        if image_data:
+            files = {'photo': image_data}
+
+        r = requests.post(
+            url,
+            headers=headers,
+            data=params,
+            files=files
+        )
+
+        if r.status_code != 200:
+            return None, r
+
+        return r.json(), r
+
     def post(self, uri: str, params: dict=None):
         params = params or {}
         url = f"{self.api_endpoint}{uri}.json"
