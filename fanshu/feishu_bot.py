@@ -1,4 +1,3 @@
-import io
 import json
 from collections import OrderedDict
 
@@ -82,14 +81,19 @@ def reply_message(message_id: str, text: str) -> ReplyMessageResponse:
     return response
 
 
-# 注册接收消息事件，处理接收到的消息。
-# Register event handler to handle received messages.
-# https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/im-v1/message/events/receive
-def download_feishu_image(file_key: str) -> bytes | None:
+def get_feishu_image_data(message_id: str, file_key: str) -> bytes | None:
     try:
-        response = client.im.v1.file.download(
-            DownloadFileRequest.builder().file_key(file_key).build()
-        )
+        request: GetMessageResourceRequest = GetMessageResourceRequest.builder() \
+            .message_id(message_id) \
+            .file_key(file_key) \
+            .type("image") \
+            .build()
+
+        # 发起请求
+        response: GetMessageResourceResponse = client.im.v1.message_resource.get(request)
+
+        logger.info(response)
+
         if response.code == 0:
             return response.file.read()
         else:
@@ -132,8 +136,11 @@ def do_p2_im_message_receive_v1(data: P2ImMessageReceiveV1) -> None:
     elif message_type == "image":
         content = json.loads(data.event.message.content)
         image_key = content.get("image_key")
+
+        logger.info(image_key)
+
         if image_key:
-            image_data = download_feishu_image(image_key)
+            image_data = get_feishu_image_data(message_id, image_key)
             if image_data:
                 fanfou_post_photo(open_id, message_id, image_data)
             else:
@@ -168,8 +175,9 @@ def fanfou_post_text(open_id, message_id, content):
         reply_message(message_id, "消息发送失败")
 
 
-def fanfou_post_photo(open_id, message_id, image_data, text=""):
-    ret = fanfou_api.post_photo(open_id, text, image_data)
+def fanfou_post_photo(open_id, message_id, image_data):
+    ret = fanfou_api.post_photo(open_id, image_data)
+
     if ret:
         logger.info(json.dumps(ret, indent=2))
 

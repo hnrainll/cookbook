@@ -62,7 +62,7 @@ def post_text(open_id: str, text: str):
     return ret
 
 
-def post_photo(open_id: str, text: str, image_data: bytes):
+def post_photo(open_id: str, image_data: bytes):
     ret = None
     user_token = _load_token(open_id)
 
@@ -75,12 +75,15 @@ def post_photo(open_id: str, text: str, image_data: bytes):
             oauth_token=token['oauth_token'],
             oauth_token_secret=token['oauth_token_secret']
         )
+        #
+        # content = {
+        #     'status': text
+        # }
 
-        content = {
-            'status': text
-        }
-
-        ret, response = ff.post_photo('/photos/upload', content, image_data)
+        # ret, response = ff.post_photo('/photos/upload', content, image_data)
+        ret, response = ff.post_photo('/photos/upload', image_data)
+        logger.info(ret)
+        logger.info(response)
 
     return ret
 
