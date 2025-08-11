@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request
 from loguru import logger
 
 from fanshu.fanfou_api import get_access_token
-from fanshu.feishu_ws_manager import LarkWebSocketManager
+from fanshu.feishu_wsm import LarkWebSocketManager
 
 load_dotenv()
 lark_ws_manager = LarkWebSocketManager()

@@ -116,7 +116,7 @@ class Fanfou:
         return r.json(), r
 
 
-    def post(self, uri: str, params: dict=None):
+    def post_text(self, uri: str, params: dict=None):
         params = params or {}
         url = f"{self.api_endpoint}{uri}.json"
 
@@ -142,7 +142,7 @@ class Fanfou:
         return r.json(), r
 
 
-    def post_photo(self, uri: str, image_data: bytes=None):
+    def post_photo(self, uri: str, files: dict=None, params: dict=None):
         url = f"{self.api_endpoint}{uri}.json"
 
         authorization = self.o.gen_authorization(
@@ -154,14 +154,10 @@ class Fanfou:
             'Authorization': authorization,
         }
 
-        files = None
-        if image_data:
-            files = {'photo': image_data}
-
         r = requests.post(
             url,
             headers=headers,
-            data={},
+            data=params,
             files=files
         )
 
