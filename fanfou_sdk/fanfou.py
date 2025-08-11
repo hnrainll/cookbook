@@ -115,7 +115,8 @@ class Fanfou:
             return None, r
         return r.json(), r
 
-    def post(self, uri: str, params: dict=None):
+
+    def post_text(self, uri: str, params: dict=None):
         params = params or {}
         url = f"{self.api_endpoint}{uri}.json"
 
@@ -133,6 +134,31 @@ class Fanfou:
             url,
             headers=headers,
             data=params
+        )
+
+        if r.status_code != 200:
+            return None, r
+
+        return r.json(), r
+
+
+    def post_photo(self, uri: str, files: dict=None, params: dict=None):
+        url = f"{self.api_endpoint}{uri}.json"
+
+        authorization = self.o.gen_authorization(
+            {'url': url, 'method': 'POST', 'data': {}},
+            self.access_oauth_token
+        )
+
+        headers = {
+            'Authorization': authorization,
+        }
+
+        r = requests.post(
+            url,
+            headers=headers,
+            data=params,
+            files=files
         )
 
         if r.status_code != 200:

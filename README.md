@@ -45,7 +45,7 @@ FANFOU_OAUTH_CALLBACK=your_oauth_callback
 
 ```bash
 # 本地测试
-uvicorn fanshu.main:app --host 0.0.0.0 --port 8009 --reload --reload-dir .
+uv run uvicorn fanshu.main:app --host 0.0.0.0 --port 8009 --reload --reload-dir .
 
 # 后台运行
 nohup gunicorn fanshu.main:app -w 1 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8009 >> fanshu.log 2>&1 &

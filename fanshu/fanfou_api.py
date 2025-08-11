@@ -57,7 +57,34 @@ def post_text(open_id: str, text: str):
             'status': text
         }
 
-        ret, response = ff.post('/statuses/update', content)
+        ret, response = ff.post_text('/statuses/update', content)
+
+    return ret
+
+
+def post_photo(open_id: str, image_data: bytes, text: str=None):
+    ret = None
+    user_token = _load_token(open_id)
+
+    if user_token:
+        token = user_token['token']
+
+        ff = Fanfou(
+            consumer_key=os.getenv('FANFOU_CONSUMER_KEY'),
+            consumer_secret=os.getenv('FANFOU_CONSUMER_SECRET'),
+            oauth_token=token['oauth_token'],
+            oauth_token_secret=token['oauth_token_secret']
+        )
+
+        files = {
+            'photo': image_data
+        }
+
+        params = {'status': text} if text else {}
+
+        ret, response = ff.post_photo('/photos/upload', files, params)
+        logger.info(ret)
+        logger.info(response)
 
     return ret
 
