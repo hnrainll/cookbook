@@ -113,12 +113,12 @@ def do_p2_im_message_receive_v1(data: P2ImMessageReceiveV1) -> None:
     open_id = data.event.sender.sender_id.open_id
     message_type = data.event.message.message_type
     message_id = data.event.message.message_id
-    # data.event.message.chat_type == "p2p":
 
     if dedup.exists(message_id):
         logger.debug(f"这条消息为重复消息: {message_id}")
         return
 
+    dedup.add(message_id)
     if message_type == "text":
         content = json.loads(data.event.message.content)["text"]
         
@@ -184,8 +184,6 @@ def fanfou_post_text(open_id, message_id, content):
     ret = fanfou_api.post_text(open_id, content)
     if ret:
         logger.info(json.dumps(ret, indent=2))
-
-        dedup.add(message_id)
         reply_message(message_id, f"消息发送成功\n\nhttps://fanfou.com/statuses/{ret['id']}")
     else:
         reply_message(message_id, "消息发送失败")
@@ -196,8 +194,6 @@ def fanfou_post_photo(open_id, message_id, image_data, text: str=None):
 
     if ret:
         logger.info(json.dumps(ret, indent=2))
-
-        dedup.add(message_id)
         reply_message(message_id, f"图片发送成功\n\nhttps://fanfou.com/statuses/{ret['id']}")
     else:
         reply_message(message_id, "图片发送失败")
