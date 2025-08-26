@@ -6,6 +6,7 @@ from lark_oapi.api.im.v1 import *
 from loguru import logger
 
 from fanshu import fanfou_api
+from fanshu import image_utils
 
 
 class OrderedDictDeduplicator:
@@ -82,6 +83,8 @@ def reply_message(message_id: str, text: str) -> ReplyMessageResponse:
 
 
 def get_feishu_image_data(message_id: str, file_key: str) -> bytes | None:
+    image_data = None
+
     try:
         request: GetMessageResourceRequest = GetMessageResourceRequest.builder() \
             .message_id(message_id) \
@@ -92,16 +95,14 @@ def get_feishu_image_data(message_id: str, file_key: str) -> bytes | None:
         # 发起请求
         response: GetMessageResourceResponse = client.im.v1.message_resource.get(request)
 
-        logger.info(response)
-
         if response.code == 0:
-            return response.file.read()
+            image_data = image_utils.compress_image_advanced(response.file.read())
         else:
             logger.error(f"下载飞书图片失败: {response.msg}")
-            return None
     except Exception as e:
         logger.error(f"下载飞书图片异常: {e}")
-        return None
+
+    return image_data
 
 
 # 注册接收消息事件，处理接收到的消息。
@@ -138,6 +139,7 @@ def do_p2_im_message_receive_v1(data: P2ImMessageReceiveV1) -> None:
 
         if image_key:
             image_data = get_feishu_image_data(message_id, image_key)
+
             if image_data:
                 fanfou_post_photo(open_id, message_id, image_data)
             else:
