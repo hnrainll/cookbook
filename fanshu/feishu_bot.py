@@ -8,6 +8,7 @@ from loguru import logger
 from fanshu import fanfou_api
 from fanshu import image_utils
 from fanshu import feishu_utils
+from fanshu.database import message_db
 
 
 class OrderedDictDeduplicator:
@@ -129,8 +130,12 @@ def do_p2_im_message_receive_v1(data: P2ImMessageReceiveV1) -> None:
             return
 
         if content == '/login':
+            # 保存登录命令到数据库
+            message_db.save_message(message_id, open_id, "text", content=content)
             fanfou_login(open_id)
         elif content == '/logout':
+            # 保存登出命令到数据库
+            message_db.save_message(message_id, open_id, "text", content=content)
             fanfou_logout(open_id)
         else:
             fanfou_post_text(open_id, message_id, content)
@@ -144,8 +149,12 @@ def do_p2_im_message_receive_v1(data: P2ImMessageReceiveV1) -> None:
             if image_data:
                 fanfou_post_photo(open_id, message_id, image_data)
             else:
+                # 保存下载失败的图片消息到数据库
+                message_db.save_message(message_id, open_id, "image", content="下载失败")
                 reply_message(message_id, "下载图片失败，无法发送。")
         else:
+            # 保存未找到文件的消息到数据库
+            message_db.save_message(message_id, open_id, "image", content="未找到文件")
             reply_message(message_id, "未找到图片文件。")
     elif message_type == "post":
         content = json.loads(data.event.message.content)
@@ -158,15 +167,23 @@ def do_p2_im_message_receive_v1(data: P2ImMessageReceiveV1) -> None:
             if image_data:
                 fanfou_post_photo(open_id, message_id, image_data, text)
             else:
+                # 保存下载失败的富文本图片消息到数据库
+                message_db.save_message(message_id, open_id, "post", content=json.dumps(content))
                 reply_message(message_id, "下载图片失败，无法发送。")
         elif text:
             if len(text) > 140:
+                # 保存超长文本到数据库
+                message_db.save_message(message_id, open_id, "post", content=text)
                 reply_message(message_id, "消息长度大于140，无法发送。")
             else:
                 fanfou_post_text(open_id, message_id, text)
         else:
+            # 保存富文本消息到数据库
+            message_db.save_message(message_id, open_id, "post", content=json.dumps(content))
             reply_message(message_id, "发送富文本内容失败。")
     else:
+        # 保存不支持的消息类型到数据库
+        message_db.save_message(message_id, open_id, message_type)
         send_message(open_id,f"当前饭薯不支持该消息类型. message_type: {message_type}")
 
 
@@ -184,21 +201,35 @@ def fanfou_logout(open_id):
 
 
 def fanfou_post_text(open_id, message_id, content):
+    # 保存消息到数据库
+    message_db.save_message(message_id, open_id, "text", content=content)
+    
     ret = fanfou_api.post_text(open_id, content)
     if ret:
         logger.info(json.dumps(ret, indent=2))
+        # 更新数据库中的饭否响应
+        message_db.update_fanfou_response(message_id, ret.get('id'), ret)
         reply_message(message_id, f"消息发送成功\n\nhttps://fanfou.com/statuses/{ret['id']}")
     else:
+        # 更新数据库中的失败状态
+        message_db.update_fanfou_response(message_id, None, {"error": "发送失败"})
         reply_message(message_id, "消息发送失败")
 
 
 def fanfou_post_photo(open_id, message_id, image_data, text: str=None):
+    # 保存消息到数据库
+    message_db.save_message(message_id, open_id, "image", content=text, image_data=image_data)
+    
     ret = fanfou_api.post_photo(open_id, image_data, text)
 
     if ret:
         logger.info(json.dumps(ret, indent=2))
+        # 更新数据库中的饭否响应
+        message_db.update_fanfou_response(message_id, ret.get('id'), ret)
         reply_message(message_id, f"图片发送成功\n\nhttps://fanfou.com/statuses/{ret['id']}")
     else:
+        # 更新数据库中的失败状态
+        message_db.update_fanfou_response(message_id, None, {"error": "图片发送失败"})
         reply_message(message_id, "图片发送失败")
 
 
