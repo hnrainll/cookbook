@@ -12,31 +12,31 @@ class LarkWebSocketManager:
         self.ws_thread = None
 
     def _run_ws_client(self):
-        new_loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(new_loop)
+        feishu_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(feishu_loop)
 
         try:
-            module_name = lark.ws.Client.__module__
-            logger.info(f"正在修复 {module_name} 中的全局 loop 变量...")
+            feishu_ws_module_name = lark.ws.Client.__module__
+            logger.info(f"正在修复 {feishu_ws_module_name} 中的全局 loop 变量...")
             
-            if module_name in sys.modules:
-                target_module = sys.modules[module_name]
+            if feishu_ws_module_name in sys.modules:
+                feishu_ws_target_module = sys.modules[feishu_ws_module_name]
                 
-                if hasattr(target_module, "loop"):
-                    setattr(target_module, "loop", new_loop)
-                    logger.info(f"已成功修复 {module_name} 中的全局 loop 变量")
+                if hasattr(feishu_ws_target_module, "loop"):
+                    setattr(feishu_ws_target_module, "loop", feishu_loop)
+                    logger.info(f"已成功修复 {feishu_ws_module_name} 中的全局 loop 变量")
                 else:
-                    logger.warning(f"在 {module_name} 中没找到全局 loop 变量，可能源码版本变了？")
+                    logger.warning(f"在 {feishu_ws_module_name} 中没找到全局 loop 变量，可能源码版本变了？")
 
-            app_id = lark.APP_ID
-            app_secret = lark.APP_SECRET
-            if app_id is None or app_secret is None:
+            feishu_app_id = lark.APP_ID
+            feishu_app_secret = lark.APP_SECRET
+            if feishu_app_id is None or feishu_app_secret is None:
                 logger.error("Lark APP_ID 或 APP_SECRET 未配置，无法启动 WebSocket 客户端")
                 return
 
             lark_ws_client = lark.ws.Client(
-                app_id,
-                app_secret,
+                feishu_app_id,
+                feishu_app_secret,
                 event_handler=feishu_handler,
                 log_level=lark.LogLevel.DEBUG,
             )
@@ -44,7 +44,7 @@ class LarkWebSocketManager:
         except Exception as e:
             logger.exception(f"WebSocket客户端错误: {e}")
         finally:
-            new_loop.close()
+            feishu_loop.close()
 
     def start(self):
         """启动WebSocket客户端"""
