@@ -38,7 +38,8 @@ class Fanfou:
         authorization = self.o.gen_authorization({'url': url, 'method': 'GET'})
         r = requests.get(
             url,
-            headers={'Authorization': authorization}
+            headers={'Authorization': authorization},
+            timeout=10
         )
 
         if r.status_code != 200:
@@ -58,7 +59,8 @@ class Fanfou:
 
         r = requests.get(
             url,
-            headers={'Authorization': authorization}
+            headers={'Authorization': authorization},
+            timeout=10
         )
 
         if r.status_code != 200:
@@ -84,7 +86,8 @@ class Fanfou:
                 'Authorization': authorization,
                 'Content-Type': 'application/x-www-form-urlencoded'
             },
-            data=params
+            data=params,
+            timeout=10
         )
 
         if r.status_code != 200:
@@ -108,7 +111,8 @@ class Fanfou:
             headers={
                 'Authorization': authorization,
                 'Content-Type': 'application/x-www-form-urlencoded'
-            }
+            },
+            timeout=10
         )
 
         if r.status_code != 200:
@@ -133,7 +137,8 @@ class Fanfou:
         r = requests.post(
             url,
             headers=headers,
-            data=params
+            data=params,
+            timeout=10
         )
 
         if r.status_code != 200:
@@ -158,7 +163,8 @@ class Fanfou:
             url,
             headers=headers,
             data=params,
-            files=files
+            files=files,
+            timeout=10
         )
 
         if r.status_code != 200:

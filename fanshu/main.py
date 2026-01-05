@@ -1,13 +1,15 @@
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI, Request
 from loguru import logger
 
 from fanshu.fanfou_api import get_access_token
 from fanshu.feishu_wsm import LarkWebSocketManager
 
-load_dotenv()
+
 lark_ws_manager = LarkWebSocketManager()
 
 
@@ -27,7 +29,6 @@ async def life_start():
 
 async def life_end():
     logger.info("End...")
-    lark_ws_manager.stop()
 
 
 app = FastAPI(

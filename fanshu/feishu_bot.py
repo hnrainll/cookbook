@@ -235,7 +235,7 @@ def fanfou_post_photo(open_id, message_id, image_data, text: str=None):
 
 # 注册事件回调
 # Register event handler.
-event_handler = (
+feishu_handler = (
     lark.EventDispatcherHandler.builder("", "")
     .register_p2_im_message_receive_v1(do_p2_im_message_receive_v1)
     .build()
@@ -246,11 +246,11 @@ event_handler = (
 # Create LarkClient object for requesting OpenAPI, and create LarkWSClient object for receiving events using long connection.
 client = lark.Client.builder().app_id(lark.APP_ID).app_secret(lark.APP_SECRET).build()
 
-lark_ws_client = lark.ws.Client(
-    lark.APP_ID,
-    lark.APP_SECRET,
-    event_handler=event_handler,
-    log_level=lark.LogLevel.DEBUG,
-)
+# lark_ws_client = lark.ws.Client(
+#     lark.APP_ID,
+#     lark.APP_SECRET,
+#     event_handler=event_handler,
+#     log_level=lark.LogLevel.DEBUG,
+# )
 
 dedup = OrderedDictDeduplicator()
