@@ -48,6 +48,8 @@ class TelegramClient:
         - @dp.message(Command("start")) 处理特定命令
         """
         
+        assert self.dp is not None, "Dispatcher not initialized"
+        
         @self.dp.message(Command("start"))
         async def handle_start(message: types.Message) -> None:
             """处理 /start 命令"""
@@ -79,6 +81,11 @@ class TelegramClient:
         Args:
             message: aiogram 消息对象
         """
+        # 检查消息发送者是否存在
+        if not message.from_user:
+            logger.debug("Skipping message without sender info")
+            return
+        
         # 只处理文本消息
         if not message.text:
             logger.debug(f"Skipping non-text message from {message.from_user.id}")
@@ -155,6 +162,8 @@ class TelegramClient:
         这个方法会持续运行，直到调用 stop()
         """
         try:
+            assert self.dp is not None, "Dispatcher not initialized"
+            assert self.bot is not None, "Bot not initialized"
             await self.dp.start_polling(
                 self.bot,
                 allowed_updates=["message"]  # 只接收消息更新
