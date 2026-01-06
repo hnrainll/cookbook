@@ -8,7 +8,7 @@ Telegram 平台适配器 - 使用 aiogram 异步客户端
 - 使用 polling 方式接收消息（也可以使用 webhook）
 """
 import asyncio
-from typing import Optional
+from typing import ClassVar, Optional
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
@@ -28,6 +28,8 @@ class TelegramClient:
     2. 接收 Telegram 消息
     3. 转换为 UnifiedMessage 并发布到事件总线
     """
+    
+    _instance: ClassVar[Optional["TelegramClient"]] = None
     
     def __init__(self):
         """初始化 Telegram 客户端"""
@@ -183,19 +185,29 @@ class TelegramClient:
             await self.bot.session.close()
         
         logger.info("Telegram client stopped")
-
-
-# 全局 Telegram 客户端实例（在 main.py 中初始化）
-telegram_client: Optional[TelegramClient] = None
-
-
-def init_telegram() -> TelegramClient:
-    """
-    初始化 Telegram 客户端
     
-    Returns:
-        TelegramClient 实例
-    """
-    global telegram_client
-    telegram_client = TelegramClient()
-    return telegram_client
+    @classmethod
+    def get_instance(cls) -> Optional["TelegramClient"]:
+        """获取单例实例（可能为 None）"""
+        return cls._instance
+    
+    @classmethod
+    def create_instance(cls) -> "TelegramClient":
+        """
+        创建单例实例
+        
+        Returns:
+            TelegramClient 实例
+        
+        Raises:
+            RuntimeError: 如果实例已存在
+        """
+        if cls._instance is not None:
+            raise RuntimeError("TelegramClient instance already exists")
+        cls._instance = cls()
+        return cls._instance
+    
+    @classmethod
+    def reset_instance(cls) -> None:
+        """重置单例（用于测试）"""
+        cls._instance = None

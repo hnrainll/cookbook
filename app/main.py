@@ -16,7 +16,7 @@ from fastapi import FastAPI
 from loguru import logger
 
 from app.core.config import settings
-from app.services.storage.db import init_database
+from app.services.storage.db import DatabaseManager
 
 
 # 配置日志
@@ -58,7 +58,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         # Step 1: 初始化并启动数据库
         if settings.database_enabled:
             logger.info("Initializing database...")
-            db_manager = init_database()
+            db_manager = DatabaseManager.create_instance()
             await db_manager.start()
         else:
             logger.info("Database disabled in config")
@@ -68,8 +68,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         fanfou_client = None
         if settings.fanfou_enabled:
             logger.info("Initializing Fanfou client...")
-            from app.services.platforms.fanfou.client import init_fanfou
-            fanfou_client = init_fanfou()
+            from app.services.platforms.fanfou.client import FanfouClient
+            fanfou_client = FanfouClient.create_instance()
             await fanfou_client.start()
         else:
             logger.info("Fanfou disabled in config")
@@ -78,8 +78,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         telegram_client = None
         if settings.telegram_enabled:
             logger.info("Initializing Telegram client...")
-            from app.services.platforms.telegram.client import init_telegram
-            telegram_client = init_telegram()
+            from app.services.platforms.telegram.client import TelegramClient
+            telegram_client = TelegramClient.create_instance()
             await telegram_client.start()
         else:
             logger.info("Telegram disabled in config")
@@ -88,11 +88,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         feishu_manager = None
         if settings.feishu_enabled:
             logger.info("Initializing Feishu client...")
-            from app.services.platforms.feishu.client import init_feishu
+            from app.services.platforms.feishu.client import FeishuManager
             
             # 获取当前事件循环
             main_loop = asyncio.get_event_loop()
-            feishu_manager = init_feishu(main_loop)
+            feishu_manager = FeishuManager.create_instance(main_loop)
             feishu_manager.start()
         else:
             logger.info("Feishu disabled in config")
@@ -197,9 +197,10 @@ async def health():
 async def stats():
     """统计信息"""
     from app.core.bus import bus
-    from app.services.storage.db import db_manager
+    from app.services.storage.db import DatabaseManager
     
     message_count = 0
+    db_manager = DatabaseManager.get_instance()
     if db_manager:
         try:
             message_count = await db_manager.get_message_count()
@@ -215,8 +216,9 @@ async def stats():
 @app.get("/messages")
 async def get_messages(limit: int = 10):
     """获取最近的消息"""
-    from app.services.storage.db import db_manager
+    from app.services.storage.db import DatabaseManager
     
+    db_manager = DatabaseManager.get_instance()
     if not db_manager:
         return {"error": "Database not enabled"}
     

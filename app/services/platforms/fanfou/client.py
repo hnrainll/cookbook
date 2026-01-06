@@ -8,7 +8,7 @@ Fanfou 平台消费者 - 接收统一消息并发送到 Fanfou
 3. 处理 OAuth 1.0a 认证
 """
 import asyncio
-from typing import Optional
+from typing import ClassVar, Optional
 
 import httpx
 from loguru import logger
@@ -25,6 +25,8 @@ class FanfouClient:
     实现 OAuth 1.0a 认证和消息发送
     注意：这里简化了 OAuth 实现，生产环境建议使用专门的 OAuth 库
     """
+    
+    _instance: ClassVar[Optional["FanfouClient"]] = None
     
     def __init__(self):
         """初始化 Fanfou 客户端"""
@@ -182,25 +184,34 @@ class FanfouClient:
             formatted = formatted[:137] + "..."
         
         return formatted
-
-
-# 全局 Fanfou 客户端实例
-fanfou_client: Optional[FanfouClient] = None
-
-
-def init_fanfou() -> FanfouClient:
-    """
-    初始化 Fanfou 客户端并注册到事件总线
     
-    Returns:
-        FanfouClient 实例
-    """
-    global fanfou_client
-    fanfou_client = FanfouClient()
+    @classmethod
+    def get_instance(cls) -> Optional["FanfouClient"]:
+        """获取单例实例（可能为 None）"""
+        return cls._instance
     
-    # 注册到事件总线
-    bus.register(fanfou_client.handle_message)
+    @classmethod
+    def create_instance(cls) -> "FanfouClient":
+        """
+        创建单例实例并注册到事件总线
+        
+        Returns:
+            FanfouClient 实例
+        
+        Raises:
+            RuntimeError: 如果实例已存在
+        """
+        if cls._instance is not None:
+            raise RuntimeError("FanfouClient instance already exists")
+        cls._instance = cls()
+        
+        # 注册到事件总线
+        bus.register(cls._instance.handle_message)
+        
+        logger.info("Fanfou client registered to event bus")
+        return cls._instance
     
-    logger.info("Fanfou client registered to event bus")
-    
-    return fanfou_client
+    @classmethod
+    def reset_instance(cls) -> None:
+        """重置单例（用于测试）"""
+        cls._instance = None

@@ -14,7 +14,7 @@ Feishu Platform Adapter with Thread Isolation
 import asyncio
 import sys
 import threading
-from typing import Any, Optional
+from typing import Any, ClassVar, Optional
 
 from loguru import logger
 from lark_oapi import Client
@@ -42,6 +42,8 @@ class FeishuManager:
     3. 接收飞书消息并转换为 UnifiedMessage
     4. 线程安全地将消息发布到主事件总线
     """
+    
+    _instance: ClassVar[Optional["FeishuManager"]] = None
     
     def __init__(self, main_loop: asyncio.AbstractEventLoop):
         """
@@ -249,22 +251,32 @@ class FeishuManager:
             logger.warning("Feishu thread did not stop gracefully")
         else:
             logger.info("Feishu thread stopped")
-
-
-# 全局飞书管理器实例（在 main.py 中初始化）
-feishu_manager: Optional[FeishuManager] = None
-
-
-def init_feishu(main_loop: asyncio.AbstractEventLoop) -> FeishuManager:
-    """
-    初始化飞书管理器
     
-    Args:
-        main_loop: 主事件循环
+    @classmethod
+    def get_instance(cls) -> Optional["FeishuManager"]:
+        """获取单例实例（可能为 None）"""
+        return cls._instance
     
-    Returns:
-        FeishuManager 实例
-    """
-    global feishu_manager
-    feishu_manager = FeishuManager(main_loop)
-    return feishu_manager
+    @classmethod
+    def create_instance(cls, main_loop: asyncio.AbstractEventLoop) -> "FeishuManager":
+        """
+        创建单例实例
+        
+        Args:
+            main_loop: 主事件循环
+        
+        Returns:
+            FeishuManager 实例
+        
+        Raises:
+            RuntimeError: 如果实例已存在
+        """
+        if cls._instance is not None:
+            raise RuntimeError("FeishuManager instance already exists")
+        cls._instance = cls(main_loop)
+        return cls._instance
+    
+    @classmethod
+    def reset_instance(cls) -> None:
+        """重置单例（用于测试）"""
+        cls._instance = None

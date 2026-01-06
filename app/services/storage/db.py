@@ -11,7 +11,7 @@ import asyncio
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import ClassVar, Optional
 
 import aiosqlite
 from loguru import logger
@@ -31,6 +31,8 @@ class DatabaseManager:
     - 消息归档
     - 统计分析
     """
+    
+    _instance: ClassVar[Optional["DatabaseManager"]] = None
     
     def __init__(self):
         """初始化数据库管理器"""
@@ -248,25 +250,34 @@ class DatabaseManager:
             }
             for row in rows
         ]
-
-
-# 全局数据库管理器实例
-db_manager: Optional[DatabaseManager] = None
-
-
-def init_database() -> DatabaseManager:
-    """
-    初始化数据库管理器并注册到事件总线
     
-    Returns:
-        DatabaseManager 实例
-    """
-    global db_manager
-    db_manager = DatabaseManager()
+    @classmethod
+    def get_instance(cls) -> Optional["DatabaseManager"]:
+        """获取单例实例（可能为 None）"""
+        return cls._instance
     
-    # 注册到事件总线
-    bus.register(db_manager.handle_message)
+    @classmethod
+    def create_instance(cls) -> "DatabaseManager":
+        """
+        创建单例实例并注册到事件总线
+        
+        Returns:
+            DatabaseManager 实例
+        
+        Raises:
+            RuntimeError: 如果实例已存在
+        """
+        if cls._instance is not None:
+            raise RuntimeError("DatabaseManager instance already exists")
+        cls._instance = cls()
+        
+        # 注册到事件总线
+        bus.register(cls._instance.handle_message)
+        
+        logger.info("Database manager registered to event bus")
+        return cls._instance
     
-    logger.info("Database manager registered to event bus")
-    
-    return db_manager
+    @classmethod
+    def reset_instance(cls) -> None:
+        """重置单例（用于测试）"""
+        cls._instance = None
