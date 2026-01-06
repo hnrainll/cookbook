@@ -199,8 +199,7 @@ def init_fanfou() -> FanfouClient:
     fanfou_client = FanfouClient()
     
     # 注册到事件总线
-    # 这样当有消息发布时，handle_message 会被自动调用
-    bus.on_event(fanfou_client.handle_message)
+    bus.register(fanfou_client.handle_message)
     
     logger.info("Fanfou client registered to event bus")
     

@@ -262,8 +262,7 @@ def init_database() -> DatabaseManager:
     db_manager = DatabaseManager()
     
     # 注册到事件总线
-    # 这样当有消息发布时，handle_message 会被自动调用
-    bus.on_event(db_manager.handle_message)
+    bus.register(db_manager.handle_message)
     
     logger.info("Database manager registered to event bus")
     

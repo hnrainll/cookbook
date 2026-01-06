@@ -23,7 +23,7 @@ class EventBus:
     异步事件总线 - 单例模式
     
     实现发布/订阅模式，支持：
-    - 装饰器方式注册消费者
+    - 编程式注册消费者
     - 异步并发分发消息
     - 自动错误隔离和日志记录
     
@@ -52,32 +52,14 @@ class EventBus:
         self._initialized = True
         logger.info("EventBus initialized")
     
-    def on_event(self, handler: MessageHandler) -> MessageHandler:
+    def register(self, handler: MessageHandler) -> None:
         """
-        装饰器：注册消息处理器
+        注册消息处理器
         
         用法示例：
         ```python
-        @bus.on_event
-        async def process_message(msg: UnifiedMessage):
-            # 处理消息
-            pass
+        bus.register(client.handle_message)
         ```
-        
-        Args:
-            handler: 异步消息处理函数
-        
-        Returns:
-            原始处理函数（支持链式装饰器）
-        """
-        if handler not in self._handlers:
-            self._handlers.append(handler)
-            logger.info(f"Registered event handler: {handler.__name__}")
-        return handler
-    
-    def register(self, handler: MessageHandler) -> None:
-        """
-        编程式注册消息处理器
         
         Args:
             handler: 异步消息处理函数
