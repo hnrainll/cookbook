@@ -83,6 +83,9 @@ class DatabaseManager:
         - timestamp: 消息时间戳
         - created_at: 入库时间
         """
+        if not self.conn:
+            raise RuntimeError("Database not connected")
+        
         await self.conn.execute("""
             CREATE TABLE IF NOT EXISTS messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
