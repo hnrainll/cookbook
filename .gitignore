@@ -23,6 +23,7 @@ wheels/
 
 # Environment variables
 .env
+.env.bak
 
 # Virtual environments
 .venv

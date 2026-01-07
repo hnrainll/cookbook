@@ -19,32 +19,30 @@ class Settings(BaseSettings):
     )
     
     # ===== FastAPI 配置 =====
-    app_name: str = Field(default="Message Sync Gateway", description="应用名称")
     debug: bool = Field(default=False, description="调试模式")
+    app_name: str = Field(default="Message Sync Gateway", description="应用名称")    
     host: str = Field(default="0.0.0.0", description="服务监听地址")
     port: int = Field(default=8000, description="服务监听端口")
     
     # ===== 飞书配置 =====
-    feishu_app_id: str = Field(default="", description="飞书应用 App ID")
-    feishu_app_secret: str = Field(default="", description="飞书应用 App Secret")
-    feishu_verification_token: str = Field(default="", description="飞书事件订阅验证 Token")
-    feishu_encrypt_key: str = Field(default="", description="飞书事件加密 Key (可选)")
     feishu_enabled: bool = Field(default=False, description="是否启用飞书集成")
+    feishu_app_id: str = Field(default="", description="飞书应用 App ID")
+    feishu_app_secret: str = Field(default="", description="飞书应用 App Secret")    
+    feishu_base_domain: str = Field(default="https://open.feishu.cn", description="飞书基础域名")
     
     # ===== Telegram 配置 =====
-    telegram_bot_token: str = Field(default="", description="Telegram Bot Token")
     telegram_enabled: bool = Field(default=False, description="是否启用 Telegram 集成")
+    telegram_bot_token: str = Field(default="", description="Telegram Bot Token")
     
     # ===== Fanfou 配置 =====
+    fanfou_enabled: bool = Field(default=False, description="是否启用 Fanfou 集成")
     fanfou_consumer_key: str = Field(default="", description="Fanfou Consumer Key")
     fanfou_consumer_secret: str = Field(default="", description="Fanfou Consumer Secret")
-    fanfou_access_token: str = Field(default="", description="Fanfou Access Token")
-    fanfou_access_secret: str = Field(default="", description="Fanfou Access Token Secret")
-    fanfou_enabled: bool = Field(default=False, description="是否启用 Fanfou 集成")
+    fanfou_oauth_callback: str = Field(default="http://127.0.0.1:8009/auth", description="Fanfou OAuth Callback URL")
     
     # ===== 数据库配置 =====
-    database_path: str = Field(default="./data/messages.db", description="SQLite 数据库文件路径")
     database_enabled: bool = Field(default=True, description="是否启用数据库存储")
+    database_path: str = Field(default="./data/messages.db", description="SQLite 数据库文件路径")
     
     # ===== 日志配置 =====
     log_level: str = Field(default="INFO", description="日志级别")
