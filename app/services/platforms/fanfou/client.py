@@ -8,6 +8,8 @@ Fanfou 平台消费者 - 接收统一消息并发送到 Fanfou
 3. 处理 OAuth 1.0a 认证
 """
 import asyncio
+import os
+import json
 from typing import ClassVar, Optional
 
 import httpx
@@ -16,6 +18,9 @@ from loguru import logger
 from app.core.bus import bus
 from app.core.config import settings
 from app.schemas.event import UnifiedMessage
+
+from app.services.platforms.fanfou.sdk import Fanfou
+from app.services.platforms.fanfou.token_utils import save_request_token, load_token, remove_token, save_user_token
 
 
 class FanfouClient:
@@ -36,8 +41,8 @@ class FanfouClient:
         # OAuth 1.0a 凭据
         self.consumer_key = settings.fanfou_consumer_key
         self.consumer_secret = settings.fanfou_consumer_secret
-        self.access_token = settings.fanfou_access_token
-        self.access_secret = settings.fanfou_access_secret
+        # self.access_token = settings.fanfou_access_token
+        # self.access_secret = settings.fanfou_access_secret
         
         logger.info("FanfouClient initialized")
     
@@ -64,6 +69,89 @@ class FanfouClient:
         await self.client.aclose()
         self.client = None
         logger.info("Fanfou client stopped")
+    
+    def gen_auth_url(self, open_id: str):
+        ff = Fanfou(
+            consumer_key=self.consumer_key,
+            consumer_secret=self.consumer_secret
+        )
+
+        token, _ = ff.request_token()
+        save_request_token(ff.oauth_token, token, open_id)
+
+        oauth_callback = os.getenv('FANFOU_OAUTH_CALLBACK')
+        url = f"https://fanfou.com/oauth/authorize?oauth_token={ff.oauth_token}&oauth_callback={oauth_callback}"
+        return url
+
+
+    def get_access_token(self, oauth_token: str):
+        request_token = _load_token(oauth_token)
+
+        if request_token:
+            ff = Fanfou(
+                consumer_key=self.consumer_key,
+                consumer_secret=self.consumer_secret
+            )
+
+            open_id = request_token['open_id']
+            token, response = ff.access_token(request_token['token'])
+
+            remove_token(oauth_token)
+            if token:
+                _save_user_token(open_id, token)
+                return "授权成功", open_id
+
+        return "授权失败", None
+
+
+    def post_text(self, open_id: str, text: str):
+        ret = None
+        user_token = _load_token(open_id)
+
+        if user_token:
+            token = user_token['token']
+
+            ff = Fanfou(
+                consumer_key=os.getenv('FANFOU_CONSUMER_KEY'),
+                consumer_secret=os.getenv('FANFOU_CONSUMER_SECRET'),
+                oauth_token=token['oauth_token'],
+                oauth_token_secret=token['oauth_token_secret']
+            )
+
+            content = {
+                'status': text
+            }
+
+            ret, response = ff.post_text('/statuses/update', content)
+
+        return ret
+
+
+    def post_photo(self, open_id: str, image_data: bytes, text: str=None):
+        ret = None
+        user_token = self._load_token(open_id)
+
+        if user_token:
+            token = user_token['token']
+
+            ff = Fanfou(
+                consumer_key=os.getenv('FANFOU_CONSUMER_KEY'),
+                consumer_secret=os.getenv('FANFOU_CONSUMER_SECRET'),
+                oauth_token=token['oauth_token'],
+                oauth_token_secret=token['oauth_token_secret']
+            )
+
+            files = {
+                'photo': image_data
+            }
+
+            params = {'status': text} if text else {}
+
+            ret, response = ff.post_photo('/photos/upload', files, params)
+            logger.info(ret)
+            logger.info(response)
+
+        return ret
     
     def _build_oauth_header(self, method: str, url: str, params: dict) -> str:
         """
