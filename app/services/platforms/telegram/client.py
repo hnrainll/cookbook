@@ -118,8 +118,7 @@ class TelegramClient:
         # 发布到事件总线
         await bus.publish(unified_msg)
         
-        # 发送确认消息
-        await message.answer("✅ Message received and forwarded!")
+        # 发送确认消息（不再在这里直接回复，由 Sink 通过 ReplyService 回复）
     
     async def start(self) -> None:
         """
@@ -195,6 +194,33 @@ class TelegramClient:
         
         logger.info("Telegram client stopped")
     
+    def reply_to_message(self, message: "UnifiedMessage", text: str) -> None:
+        """供 ReplyService 调用：回复用户消息"""
+        if not self.bot:
+            logger.warning("Telegram bot not started, cannot reply")
+            return
+        chat_id = message.chat_id
+        if not chat_id:
+            chat_id = message.sender_id
+        try:
+            asyncio.get_event_loop().create_task(
+                self.bot.send_message(chat_id=int(chat_id), text=text)
+            )
+        except Exception as e:
+            logger.error(f"Telegram reply failed: {e}")
+
+    def send_to_user(self, user_id: str, text: str) -> None:
+        """供 ReplyService 调用：主动发送消息"""
+        if not self.bot:
+            logger.warning("Telegram bot not started, cannot send")
+            return
+        try:
+            asyncio.get_event_loop().create_task(
+                self.bot.send_message(chat_id=int(user_id), text=text)
+            )
+        except Exception as e:
+            logger.error(f"Telegram send failed: {e}")
+
     @classmethod
     def get_instance(cls) -> Optional["TelegramClient"]:
         """获取单例实例（可能为 None）"""

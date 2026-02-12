@@ -1,282 +1,379 @@
 """
 Feishu Platform Adapter with Thread Isolation
-飞书平台适配器 - 包含线程隔离和 Monkey Patch 解决方案
+飞书平台适配器 - 使用 lark.ws.Client WebSocket 长连接
 
-难点：
-1. lark-oapi SDK 是同步阻塞的，不能直接在 asyncio 主循环中使用
-2. SDK 内部可能绑定了全局 event loop，在子线程中运行会出错
-
-解决方案：
-1. 在独立线程中运行 SDK
-2. Monkey Patch 修正 SDK 的 loop 绑定问题
-3. 使用线程安全的方式将消息传递回主事件循环
+核心方案：
+1. lark-oapi SDK 是同步阻塞的，运行在独立线程
+2. Monkey Patch 修正 SDK 的 event loop 绑定问题
+3. 使用 lark.ws.Client + EventDispatcherHandler（与旧版一致）
+4. 线程安全地将消息发布到主事件循环的消息总线
 """
 import asyncio
+import json
+import os
 import sys
 import threading
+from collections import OrderedDict
+from pathlib import Path
 from typing import Any, ClassVar, Optional
 
+import lark_oapi as lark
+from lark_oapi.api.im.v1 import (
+    CreateMessageRequest,
+    CreateMessageRequestBody,
+    CreateMessageResponse,
+    GetMessageResourceRequest,
+    GetMessageResourceResponse,
+    ReplyMessageRequest,
+    ReplyMessageRequestBody,
+    ReplyMessageResponse,
+    P2ImMessageReceiveV1,
+)
 from loguru import logger
-from lark_oapi import Client
-try:
-    # 尝试导入事件相关类（根据实际 SDK 版本可能不同）
-    from lark_oapi.event import EventManager, MessageReceiveEvent
-except ImportError:
-    # 如果导入失败，定义占位符（实际使用时需要查阅 SDK 文档）
-    EventManager = None
-    MessageReceiveEvent = None
-    logger.warning("Failed to import EventManager from lark_oapi, Feishu integration may not work")
 
 from app.core.bus import bus
 from app.core.config import settings
 from app.schemas.event import MessageSource, UnifiedMessage
+from app.utils.image import compress_image_advanced
+from app.utils.feishu import extract_img_and_first_text_group
+
+
+class OrderedDictDeduplicator:
+    """消息去重器，使用 OrderedDict 实现 LRU 风格去重"""
+
+    def __init__(self, max_size: int = 100):
+        self.max_size = max_size
+        self.messages: OrderedDict[str, bool] = OrderedDict()
+
+    def add(self, message_id: str) -> bool:
+        """添加消息 ID，返回 True 表示是新消息，False 表示重复"""
+        if message_id in self.messages:
+            return False
+        if len(self.messages) >= self.max_size:
+            self.messages.popitem(last=False)
+        self.messages[message_id] = True
+        return True
+
+    def exists(self, message_id: str) -> bool:
+        return message_id in self.messages
 
 
 class FeishuManager:
     """
     飞书客户端管理器
-    
+
     核心职责：
-    1. 在独立线程中运行飞书 SDK（避免阻塞主循环）
-    2. Monkey Patch 修正 SDK 的 event loop 绑定问题
-    3. 接收飞书消息并转换为 UnifiedMessage
-    4. 线程安全地将消息发布到主事件总线
+    1. 在独立线程中运行 lark.ws.Client WebSocket 长连接
+    2. 接收飞书消息并转换为 UnifiedMessage
+    3. 线程安全地将消息发布到主事件总线
+    4. 提供 send_message / reply_message 供 ReplyService 使用
     """
-    
+
     _instance: ClassVar[Optional["FeishuManager"]] = None
-    
+
     def __init__(self, main_loop: asyncio.AbstractEventLoop):
-        """
-        初始化飞书管理器
-        
-        Args:
-            main_loop: 主事件循环，用于将消息从子线程提交回主线程
-        """
         self.main_loop = main_loop
         self.thread: Optional[threading.Thread] = None
-        self.client: Optional[Client] = None
-        self.event_manager: Optional[Any] = None  # type: ignore
-        self._stop_event = threading.Event()
-        
+        self.client: Optional[lark.Client] = None
+        self._dedup = OrderedDictDeduplicator()
         logger.info("FeishuManager initialized")
-    
-    def _monkey_patch_sdk(self) -> None:
-        """
-        Monkey Patch: 修正飞书 SDK 的 event loop 绑定问题
-        
-        为什么需要这个？
-        - lark-oapi SDK 内部某些模块可能在导入时绑定了全局 event loop
-        - 当在子线程中运行时，这个 loop 可能是主线程的，导致错误
-        - 我们需要将其替换为当前子线程的 loop
-        
-        实现原理：
-        1. 遍历已导入的 lark_oapi 相关模块
-        2. 检查模块中是否有名为 'loop' 的全局变量
-        3. 如果有，将其替换为当前线程的 event loop
-        """
+
+    def send_message(self, open_id: str, text: str) -> CreateMessageResponse:
+        """发送消息给用户"""
+        content = json.dumps({"text": text})
+        request = (
+            CreateMessageRequest.builder()
+            .receive_id_type("open_id")
+            .request_body(
+                CreateMessageRequestBody.builder()
+                .receive_id(open_id)
+                .msg_type("text")
+                .content(content)
+                .build()
+            )
+            .build()
+        )
+        response = self.client.im.v1.message.create(request)
+        return response
+
+    def reply_message(self, message_id: str, text: str) -> ReplyMessageResponse:
+        """回复消息"""
+        content = json.dumps({"text": text})
+        request = (
+            ReplyMessageRequest.builder()
+            .message_id(message_id)
+            .request_body(
+                ReplyMessageRequestBody.builder()
+                .content(content)
+                .msg_type("text")
+                .build()
+            )
+            .build()
+        )
+        response = self.client.im.v1.message.reply(request)
+        return response
+
+    def get_feishu_image_data(self, message_id: str, file_key: str) -> Optional[bytes]:
+        """下载飞书图片并压缩"""
         try:
-            # 获取当前子线程的新 event loop
-            current_loop = asyncio.get_event_loop()
-            
-            # 遍历所有已导入的模块
-            for module_name, module in list(sys.modules.items()):
-                # 只处理 lark_oapi 相关模块
-                if module_name.startswith("lark_oapi") and module:
-                    # 检查模块是否有 loop 属性
-                    if hasattr(module, "loop"):
-                        old_loop = getattr(module, "loop", None)
-                        # 替换为当前线程的 loop
-                        setattr(module, "loop", current_loop)
-                        logger.debug(
-                            f"Monkey patched {module_name}.loop: "
-                            f"{id(old_loop)} -> {id(current_loop)}"
-                        )
-            
-            logger.info("Feishu SDK monkey patch completed")
-            
+            request = (
+                GetMessageResourceRequest.builder()
+                .message_id(message_id)
+                .file_key(file_key)
+                .type("image")
+                .build()
+            )
+            response: GetMessageResourceResponse = self.client.im.v1.message_resource.get(request)
+
+            if response.code == 0:
+                return compress_image_advanced(response.file.read())
+            else:
+                logger.error(f"下载飞书图片失败: {response.msg}")
         except Exception as e:
-            logger.error(f"Monkey patch failed: {e}", exc_info=True)
-    
-    def _run_in_thread(self) -> None:
-        """
-        在独立线程中运行飞书 SDK
-        
-        执行流程：
-        1. 创建新的 event loop（子线程需要独立的 loop）
-        2. 执行 Monkey Patch
-        3. 初始化飞书客户端和事件管理器
-        4. 注册消息接收处理器
-        5. 进入事件循环（阻塞，直到收到停止信号）
-        """
+            logger.error(f"下载飞书图片异常: {e}")
+        return None
+
+    def _reply_for_reply_service(self, message: UnifiedMessage, text: str) -> None:
+        """供 ReplyService 调用的回复方法"""
+        message_id = message.raw_data.get("message_id")
+        if message_id:
+            try:
+                self.reply_message(message_id, text)
+            except Exception as e:
+                logger.error(f"飞书回复失败: {e}")
+        else:
+            # 没有 message_id，用 send_message
+            try:
+                self.send_message(message.sender_id, text)
+            except Exception as e:
+                logger.error(f"飞书发送失败: {e}")
+
+    def _send_for_reply_service(self, user_id: str, text: str) -> None:
+        """供 ReplyService 调用的发送方法"""
         try:
-            # Step 1: 为子线程创建新的 event loop
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            logger.info("Created new event loop for Feishu thread")
-            
-            # Step 2: Monkey Patch SDK
-            self._monkey_patch_sdk()
-            
-            # Step 3: 初始化飞书客户端
-            self.client = Client.builder() \
+            self.send_message(user_id, text)
+        except Exception as e:
+            logger.error(f"飞书发送失败: {e}")
+
+    def _do_handle_message(self, data: P2ImMessageReceiveV1) -> None:
+        """处理飞书消息接收事件（在子线程中执行）"""
+        try:
+            open_id = data.event.sender.sender_id.open_id
+            message_type = data.event.message.message_type
+            message_id = data.event.message.message_id
+            chat_id = data.event.message.chat_id
+
+            # 去重
+            if self._dedup.exists(message_id):
+                logger.debug(f"重复消息: {message_id}")
+                return
+            self._dedup.add(message_id)
+
+            if message_type == "text":
+                self._handle_text_message(data, open_id, message_id, chat_id)
+            elif message_type == "image":
+                self._handle_image_message(data, open_id, message_id, chat_id)
+            elif message_type == "post":
+                self._handle_post_message(data, open_id, message_id, chat_id)
+            else:
+                self.send_message(open_id, f"当前饭薯不支持该消息类型. message_type: {message_type}")
+
+        except Exception as e:
+            logger.error(f"处理飞书消息异常: {e}", exc_info=True)
+
+    def _handle_text_message(self, data, open_id, message_id, chat_id):
+        """处理文本消息"""
+        content = json.loads(data.event.message.content)["text"]
+
+        # 检查命令
+        if content.startswith("/"):
+            msg = UnifiedMessage(
+                source=MessageSource.FEISHU,
+                content=content,
+                message_type="text",
+                sender_id=open_id,
+                chat_id=chat_id,
+                command=content,
+                raw_data={"message_id": message_id, "message_type": "text"},
+            )
+            self._publish_to_bus(msg)
+            return
+
+        # 检查长度
+        if len(content) > 140:
+            self.reply_message(message_id, "消息长度大于140，无法发送。")
+            return
+
+        msg = UnifiedMessage(
+            source=MessageSource.FEISHU,
+            content=content,
+            message_type="text",
+            sender_id=open_id,
+            chat_id=chat_id,
+            raw_data={"message_id": message_id, "message_type": "text"},
+        )
+        self._publish_to_bus(msg)
+
+    def _handle_image_message(self, data, open_id, message_id, chat_id):
+        """处理图片消息"""
+        content = json.loads(data.event.message.content)
+        image_key = content.get("image_key")
+
+        if not image_key:
+            self.reply_message(message_id, "未找到图片文件。")
+            return
+
+        image_data = self.get_feishu_image_data(message_id, image_key)
+        if not image_data:
+            self.reply_message(message_id, "下载图片失败，无法发送。")
+            return
+
+        # 保存图片到文件系统
+        image_path = self._save_image(str(message_id), image_data)
+
+        msg = UnifiedMessage(
+            source=MessageSource.FEISHU,
+            content="",
+            message_type="image",
+            sender_id=open_id,
+            chat_id=chat_id,
+            image_data=image_data,
+            image_key=image_key,
+            image_path=image_path,
+            raw_data={"message_id": message_id, "message_type": "image"},
+        )
+        self._publish_to_bus(msg)
+
+    def _handle_post_message(self, data, open_id, message_id, chat_id):
+        """处理富文本消息"""
+        content = json.loads(data.event.message.content)
+        image_key, text = extract_img_and_first_text_group(content)
+
+        if image_key:
+            image_data = self.get_feishu_image_data(message_id, image_key)
+            if not image_data:
+                self.reply_message(message_id, "下载图片失败，无法发送。")
+                return
+
+            image_path = self._save_image(str(message_id), image_data)
+            msg = UnifiedMessage(
+                source=MessageSource.FEISHU,
+                content=text or "",
+                message_type="image",
+                sender_id=open_id,
+                chat_id=chat_id,
+                image_data=image_data,
+                image_key=image_key,
+                image_path=image_path,
+                raw_data={"message_id": message_id, "message_type": "post"},
+            )
+            self._publish_to_bus(msg)
+        elif text:
+            if len(text) > 140:
+                self.reply_message(message_id, "消息长度大于140，无法发送。")
+                return
+
+            msg = UnifiedMessage(
+                source=MessageSource.FEISHU,
+                content=text,
+                message_type="text",
+                sender_id=open_id,
+                chat_id=chat_id,
+                raw_data={"message_id": message_id, "message_type": "post"},
+            )
+            self._publish_to_bus(msg)
+        else:
+            self.reply_message(message_id, "发送富文本内容失败。")
+
+    def _save_image(self, event_id: str, image_data: bytes) -> str:
+        """保存图片到文件系统，返回相对路径"""
+        image_dir = Path("data/images")
+        image_dir.mkdir(parents=True, exist_ok=True)
+        image_path = f"data/images/{event_id}.jpg"
+        Path(image_path).write_bytes(image_data)
+        return image_path
+
+    def _publish_to_bus(self, message: UnifiedMessage) -> None:
+        """线程安全地将消息发布到主事件循环的 EventBus"""
+        try:
+            future = asyncio.run_coroutine_threadsafe(
+                bus.publish(message), self.main_loop
+            )
+            future.result(timeout=10.0)
+        except Exception as e:
+            logger.error(f"发布消息到 EventBus 失败: {e}", exc_info=True)
+
+    def _run_in_thread(self) -> None:
+        """在独立线程中运行 lark.ws.Client WebSocket 长连接"""
+        try:
+            # 创建子线程的 event loop
+            feishu_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(feishu_loop)
+
+            # Monkey Patch：修复 SDK 的全局 loop 变量
+            feishu_ws_module_name = lark.ws.Client.__module__
+            if feishu_ws_module_name in sys.modules:
+                feishu_ws_module = sys.modules[feishu_ws_module_name]
+                if hasattr(feishu_ws_module, "loop"):
+                    setattr(feishu_ws_module, "loop", feishu_loop)
+                    logger.info(f"已修复 {feishu_ws_module_name} 中的全局 loop 变量")
+
+            # 初始化 Lark Client（用于 OpenAPI 调用）
+            self.client = lark.Client.builder() \
                 .app_id(settings.feishu_app_id) \
                 .app_secret(settings.feishu_app_secret) \
                 .build()
-            
-            # Step 4: 初始化事件管理器
-            if EventManager is not None:
-                self.event_manager = EventManager()
-            else:
-                logger.error("EventManager not available, skipping event registration")
-                return
-            
-            # Step 5: 注册消息接收事件处理器
-            @self.event_manager.register("im.message.receive_v1")  # type: ignore
-            def handle_message(data: Any) -> None:
-                """处理飞书消息接收事件"""
-                try:
-                    self._handle_feishu_message(data)
-                except Exception as e:
-                    logger.error(f"Error handling Feishu message: {e}", exc_info=True)
-            
-            logger.info("Feishu event handlers registered")
-            
-            # Step 6: 保持线程运行，等待停止信号
-            logger.info("Feishu thread started, waiting for messages...")
-            self._stop_event.wait()
-            
-            logger.info("Feishu thread stopping...")
-            
+
+            # 注册事件处理器
+            handler = (
+                lark.EventDispatcherHandler.builder("", "")
+                .register_p2_im_message_receive_v1(self._do_handle_message)
+                .build()
+            )
+
+            # 创建并启动 WebSocket 客户端
+            ws_client = lark.ws.Client(
+                settings.feishu_app_id,
+                settings.feishu_app_secret,
+                event_handler=handler,
+                log_level=lark.LogLevel.DEBUG,
+            )
+
+            logger.info("飞书 WebSocket 客户端启动中...")
+            ws_client.start()
+
         except Exception as e:
-            logger.error(f"Error in Feishu thread: {e}", exc_info=True)
+            logger.exception(f"飞书 WebSocket 客户端错误: {e}")
         finally:
-            # 清理资源
-            if loop and not loop.is_closed():
-                loop.close()
-            logger.info("Feishu thread stopped")
-    
-    def _handle_feishu_message(self, event: Any) -> None:  # type: ignore
-        """
-        处理飞书消息事件
-        
-        职责：
-        1. 从飞书事件中提取消息内容
-        2. 转换为 UnifiedMessage 标准格式
-        3. 线程安全地发布到主事件循环的消息总线
-        
-        Args:
-            event: 飞书消息接收事件
-        """
-        try:
-            # 提取消息内容
-            message = event.event.message
-            sender = event.event.sender
-            
-            # 解析消息内容（飞书消息是 JSON 格式）
-            content = message.content
-            message_type = message.message_type
-            
-            # 只处理文本消息（可以扩展支持其他类型）
-            if message_type != "text":
-                logger.debug(f"Skipping non-text message type: {message_type}")
-                return
-            
-            # 从 JSON 中提取文本
-            import json
-            content_obj = json.loads(content)
-            text_content = content_obj.get("text", "")
-            
-            # 构建统一消息对象
-            unified_msg = UnifiedMessage(
-                source=MessageSource.FEISHU,
-                content=text_content,
-                sender_id=sender.sender_id.user_id if sender.sender_id else "unknown",
-                sender_name=None,  # 飞书需要额外调用 API 获取用户名
-                chat_id=message.chat_id,
-                raw_data={
-                    "message_id": message.message_id,
-                    "message_type": message_type,
-                    "chat_type": message.chat_type,
-                    "event": event.event.__dict__
-                }
-            )
-            
-            logger.info(
-                f"Received Feishu message: {unified_msg.event_id} "
-                f"from {unified_msg.sender_id}"
-            )
-            
-            # 线程安全地将消息发布到主循环的事件总线
-            # 使用 run_coroutine_threadsafe 将协程提交到主事件循环
-            future = asyncio.run_coroutine_threadsafe(
-                bus.publish(unified_msg),
-                self.main_loop
-            )
-            
-            # 等待发布完成（可选，这里设置超时避免阻塞）
-            future.result(timeout=5.0)
-            
-        except Exception as e:
-            logger.error(f"Error processing Feishu message: {e}", exc_info=True)
-    
+            feishu_loop.close()
+
     def start(self) -> None:
         """启动飞书客户端（在独立线程中）"""
         if self.thread and self.thread.is_alive():
             logger.warning("Feishu thread already running")
             return
-        
-        # 创建并启动 daemon 线程
-        # daemon=True 表示主程序退出时，子线程自动退出
         self.thread = threading.Thread(
-            target=self._run_in_thread,
-            daemon=True,
-            name="FeishuThread"
+            target=self._run_in_thread, daemon=True, name="FeishuThread"
         )
         self.thread.start()
         logger.info("Feishu thread started")
-    
+
     def stop(self) -> None:
         """停止飞书客户端"""
-        if not self.thread or not self.thread.is_alive():
-            logger.warning("Feishu thread not running")
-            return
-        
-        logger.info("Stopping Feishu thread...")
-        self._stop_event.set()
-        
-        # 等待线程结束（最多 5 秒）
-        self.thread.join(timeout=5.0)
-        
-        if self.thread.is_alive():
-            logger.warning("Feishu thread did not stop gracefully")
-        else:
-            logger.info("Feishu thread stopped")
-    
+        if self.thread and self.thread.is_alive():
+            logger.info("Feishu thread is daemon, will stop with main process")
+
     @classmethod
     def get_instance(cls) -> Optional["FeishuManager"]:
-        """获取单例实例（可能为 None）"""
         return cls._instance
-    
+
     @classmethod
     def create_instance(cls, main_loop: asyncio.AbstractEventLoop) -> "FeishuManager":
-        """
-        创建单例实例
-        
-        Args:
-            main_loop: 主事件循环
-        
-        Returns:
-            FeishuManager 实例
-        
-        Raises:
-            RuntimeError: 如果实例已存在
-        """
         if cls._instance is not None:
             raise RuntimeError("FeishuManager instance already exists")
         cls._instance = cls(main_loop)
         return cls._instance
-    
+
     @classmethod
     def reset_instance(cls) -> None:
-        """重置单例（用于测试）"""
         cls._instance = None

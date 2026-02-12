@@ -7,7 +7,7 @@ from enum import Enum
 from typing import Any, Dict, Optional
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class MessageSource(str, Enum):
@@ -23,69 +23,85 @@ class MessageSource(str, Enum):
 class UnifiedMessage(BaseModel):
     """
     统一消息模型
-    
+
     这是系统内部流转的标准化消息格式，所有平台的消息都会被转换为此格式。
     通过异步消息总线在生产者和消费者之间传递。
-    
-    设计原则：
-    - 平台无关：字段设计不依赖任何特定平台的数据结构
-    - 可扩展：通过 raw_data 保留原始数据，支持未来扩展
-    - 可追溯：包含 event_id 和 timestamp 用于调试和日志
     """
-    
+
     event_id: UUID = Field(
         default_factory=uuid4,
         description="事件唯一标识符，自动生成"
     )
-    
+
     source: MessageSource = Field(
         ...,
         description="消息来源平台"
     )
-    
+
     content: str = Field(
         ...,
         description="消息文本内容"
     )
-    
+
+    message_type: str = Field(
+        default="text",
+        description="消息类型: text/image/post"
+    )
+
     sender_id: str = Field(
         ...,
         description="发送者 ID（平台相关格式）"
     )
-    
+
     sender_name: Optional[str] = Field(
         default=None,
         description="发送者名称（可选）"
     )
-    
+
     chat_id: Optional[str] = Field(
         default=None,
         description="会话 ID（可选，用于群聊等场景）"
     )
-    
+
+    image_data: Optional[bytes] = Field(
+        default=None,
+        description="图片二进制数据（仅内存传递，不持久化）",
+        exclude=True,
+    )
+
+    image_key: Optional[str] = Field(
+        default=None,
+        description="飞书图片标识"
+    )
+
+    image_path: Optional[str] = Field(
+        default=None,
+        description="图片文件路径"
+    )
+
+    command: Optional[str] = Field(
+        default=None,
+        description="特殊命令，如 /login fanfou, /logout fanfou"
+    )
+
     raw_data: Dict[str, Any] = Field(
         default_factory=dict,
         description="原始平台数据，保留完整上下文信息"
     )
-    
+
     timestamp: datetime = Field(
         default_factory=datetime.now,
         description="消息创建时间戳"
     )
-    
-    class Config:
-        """Pydantic 配置"""
-        json_encoders = {
-            UUID: str,
-            datetime: lambda v: v.isoformat()
-        }
-        use_enum_values = True
-    
+
+    model_config = ConfigDict(use_enum_values=True)
+
     def __str__(self) -> str:
         """字符串表示，便于日志输出"""
         return (
             f"UnifiedMessage(id={self.event_id}, "
             f"source={self.source}, "
+            f"type={self.message_type}, "
             f"sender={self.sender_id}, "
             f"content={self.content[:50]}...)"
         )

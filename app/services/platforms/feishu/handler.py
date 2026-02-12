@@ -1,66 +1,69 @@
 """
-Feishu Webhook Handler for FastAPI
-飞书 Webhook 处理器 - 用于接收飞书事件回调
-
-这个模块提供 FastAPI 路由处理函数，用于：
-1. 接收飞书服务器的事件回调
-2. 验证请求签名（安全性）
-3. 将事件转发给飞书管理器处理
+Feishu Webhook Handler & OAuth Callback
+飞书 Webhook + 通用 OAuth 回调路由
 """
+import json
+
 from fastapi import APIRouter, Request, Response
 from loguru import logger
 
 from app.core.config import settings
 
 
-router = APIRouter(prefix="/webhook", tags=["webhook"])
+router = APIRouter(tags=["webhook"])
 
 
-@router.post("/feishu")
+@router.post("/webhook/feishu")
 async def feishu_webhook(request: Request) -> Response:
-    """
-    飞书事件回调端点
-    
-    飞书服务器会将事件（如消息接收、卡片点击等）POST 到这个 URL
-    
-    Args:
-        request: FastAPI 请求对象
-    
-    Returns:
-        响应对象
-    """
+    """飞书事件回调端点（URL 验证用）"""
     try:
-        # 获取原始请求体
         body = await request.body()
-        headers = dict(request.headers)
-        
-        logger.debug(f"Received Feishu webhook: {len(body)} bytes")
-        
-        # TODO: 验证签名（生产环境必须）
-        # if not verify_signature(body, headers):
-        #     logger.warning("Invalid Feishu webhook signature")
-        #     return Response(status_code=401)
-        
-        # 解析 JSON
-        import json
         data = json.loads(body)
-        
-        # 处理 URL 验证挑战
-        # 飞书配置 Webhook 时会发送验证请求
+
         if "challenge" in data:
             logger.info("Received Feishu URL verification challenge")
             return Response(
                 content=json.dumps({"challenge": data["challenge"]}),
-                media_type="application/json"
+                media_type="application/json",
             )
-        
-        # 正常事件处理
-        # 注意：这里只是接收，真正的处理在 FeishuManager 的独立线程中
+
         logger.info(f"Received Feishu event: {data.get('type', 'unknown')}")
-        
-        # 快速返回响应（飞书要求 3 秒内响应）
         return Response(content=json.dumps({"code": 0}), media_type="application/json")
-        
+
     except Exception as e:
         logger.error(f"Error handling Feishu webhook: {e}", exc_info=True)
         return Response(status_code=500)
+
+
+@router.get("/auth")
+async def oauth_callback(request: Request):
+    """
+    通用 OAuth 回调端点
+
+    接收 platform 和 oauth_token 参数，委托 AuthService 处理。
+    URL 格式: /auth?platform=fanfou&oauth_token=xxx
+    或兼容旧版: /auth?oauth_token=xxx（默认 platform=fanfou）
+    """
+    from app.core.auth import AuthService
+    from app.core.reply import ReplyService
+
+    oauth_token = request.query_params.get("oauth_token")
+    platform = request.query_params.get("platform", "fanfou")
+
+    if not oauth_token:
+        return {"message": "缺少 oauth_token 参数"}
+
+    auth_service = AuthService.get_instance()
+    if not auth_service:
+        return {"message": "AuthService 未初始化"}
+
+    result, user_id = auth_service.handle_callback(platform, dict(request.query_params))
+
+    # 通过 ReplyService 通知用户
+    if user_id:
+        reply_service = ReplyService.get_instance()
+        if reply_service:
+            from app.schemas.event import MessageSource
+            reply_service.send(MessageSource.FEISHU, user_id, result)
+
+    return {"message": result}
