@@ -22,13 +22,12 @@ class Settings(BaseSettings):
     debug: bool = Field(default=False, description="调试模式")
     app_name: str = Field(default="Message Sync Gateway", description="应用名称")    
     host: str = Field(default="0.0.0.0", description="服务监听地址")
-    port: int = Field(default=8000, description="服务监听端口")
+    port: int = Field(default=8009, description="服务监听端口")
     
     # ===== 飞书配置 =====
     feishu_enabled: bool = Field(default=False, description="是否启用飞书集成")
     feishu_app_id: str = Field(default="", description="飞书应用 App ID")
-    feishu_app_secret: str = Field(default="", description="飞书应用 App Secret")    
-    feishu_base_domain: str = Field(default="https://open.feishu.cn", description="飞书基础域名")
+    feishu_app_secret: str = Field(default="", description="飞书应用 App Secret")
     
     # ===== Telegram 配置 =====
     telegram_enabled: bool = Field(default=False, description="是否启用 Telegram 集成")
