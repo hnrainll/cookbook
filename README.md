@@ -1,62 +1,81 @@
-# 饭否的飞书机器人
+# Cookbook - 多平台消息同步网关
 
-通过飞书机器人向饭否发送消息。
+通过飞书/Telegram 机器人向饭否发送消息，基于 Event Bus 架构实现多 Source → 多 Sink 的消息流转。
 
-## 功能特点
+## 架构
 
-- 支持通过飞书机器人接收消息
-- 支持将消息转发到饭否平台
-- 使用环境变量进行配置管理
+```
+Sources                    Core                        Sinks
+┌──────────┐         ┌──────────────┐           ┌──────────────┐
+│ Feishu   │────┐    │  EventBus    │     ┌────▶│ Fanfou       │
+│ (WebSocket)   ├───▶│  publish()   │─────┤     └──────────────┘
+└──────────┘    │    └──────────────┘     │     ┌──────────────┐
+┌──────────┐    │                         └────▶│ SQLite       │
+│ Telegram │────┘                               └──────────────┘
+│ (Polling)│
+└──────────┘
+```
 
-## 安装依赖
+## 功能
+
+- 飞书：文本、图片、富文本消息转发到饭否
+- Telegram：文本消息转发到饭否
+- 图片自动压缩（≤2MB）
+- 多平台 OAuth 授权管理（`/login fanfou`、`/logout fanfou`）
+- 消息持久化到 SQLite
+- 消息去重、140 字符限制检查
+
+## 快速开始
 
 ```bash
+# 安装依赖
 uv sync
+
+# 配置环境变量
+cp .env.example .env
+# 编辑 .env，填写各平台的认证信息
+
+# 本地开发
+uv run uvicorn app.main:app --host 0.0.0.0 --port 8009 --reload
+
+# 生产部署
+./start.sh
+
+# 停止服务
+./stop.sh
 ```
 
-## 配置说明
-
-1. 创建 `.env` 文件并配置以下环境变量：
-
-```
-# 飞书机器人配置
-BASE_DOMAIN=https://open.feishu.cn
-APP_ID=your_app_id
-APP_SECRET=your_app_secret
-
-# 饭否API配置
-FANFOU_CONSUMER_KEY=your_consumer_key
-FANFOU_CONSUMER_SECRET=your_consumer_secret
-FANFOU_OAUTH_CALLBACK=your_oauth_callback
-```
-
-2. 创建飞书机器人
-   - 在飞书开放平台创建机器人
-   - 使用长链接的形式交互
-
-3. 获取饭否 API 密钥：
-   - 在饭否开放平台注册应用（饭否已经不审核新注册应用，故申请的应用也无法使用）
-   - 获取 Consumer Key 和 Consumer Secret
-   - 获取 Access Token 和 Access Token Secret
-
-## 使用方法
-
-运行主程序：
+## 测试
 
 ```bash
-# 本地测试
-uv run uvicorn fanshu.main:app --host 0.0.0.0 --port 8009 --reload --reload-dir .
-
-# 后台运行
-nohup gunicorn fanshu.main:app -w 1 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8009 >> fanshu.log 2>&1 &
+uv run pytest tests/ -v
 ```
 
-## 注意事项
+## 目录结构
 
-- 请确保所有必要的环境变量都已正确配置
-- 保护好你的 API 密钥和令牌，不要泄露给他人
-- 建议将 `.env` 文件添加到 `.gitignore` 中 
+```
+app/
+├── core/           # 核心组件
+│   ├── bus.py      # 异步 EventBus
+│   ├── config.py   # Pydantic Settings 配置
+│   ├── auth.py     # AuthService 多平台 OAuth 管理
+│   └── reply.py    # ReplyService 回复路由
+├── schemas/
+│   └── event.py    # UnifiedMessage 统一消息模型
+├── utils/
+│   ├── image.py    # 图片压缩
+│   └── feishu.py   # 飞书富文本解析
+├── services/
+│   ├── platforms/
+│   │   ├── feishu/     # 飞书 Source (lark.ws.Client WebSocket)
+│   │   ├── telegram/   # Telegram Source (aiogram polling)
+│   │   └── fanfou/     # 饭否 Sink (httpx 异步)
+│   └── storage/
+│       └── db.py       # SQLite Sink (aiosqlite)
+└── main.py         # FastAPI 入口
+```
 
 ## 感谢
-- [https://github.com/LitoMore/fanfou-sdk-python](https://github.com/LitoMore/fanfou-sdk-python)
-- [https://github.com/fanfoujs/nofan](https://github.com/fanfoujs/nofan)
+
+- [fanfou-sdk-python](https://github.com/LitoMore/fanfou-sdk-python)
+- [nofan](https://github.com/fanfoujs/nofan)
