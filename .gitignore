@@ -44,3 +44,5 @@ messages.db
 
 data/
 logs/
+
+*.log
