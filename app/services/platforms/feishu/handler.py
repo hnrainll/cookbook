@@ -57,7 +57,7 @@ async def oauth_callback(request: Request):
     if not auth_service:
         return {"message": "AuthService 未初始化"}
 
-    result, user_id = auth_service.handle_callback(platform, dict(request.query_params))
+    result, user_id = await auth_service.handle_callback(platform, dict(request.query_params))
 
     # 通过 ReplyService 通知用户
     if user_id:

@@ -1,6 +1,6 @@
 from urllib import parse
 
-import requests
+import httpx
 
 from . import oauth
 
@@ -33,14 +33,15 @@ class Fanfou:
         self.oauth_endpoint = self.protocol + '://' + self.oauth_domain
         self.access_oauth_token = {'key': self.oauth_token, 'secret': self.oauth_token_secret}
 
-    def request_token(self):
+    async def request_token(self):
         url = self.oauth_endpoint + '/oauth/request_token'
         authorization = self.o.gen_authorization({'url': url, 'method': 'GET'})
-        r = requests.get(
-            url,
-            headers={'Authorization': authorization},
-            timeout=10
-        )
+        async with httpx.AsyncClient() as client:
+            r = await client.get(
+                url,
+                headers={'Authorization': authorization},
+                timeout=10
+            )
 
         if r.status_code != 200:
             return None, r
@@ -50,18 +51,19 @@ class Fanfou:
         self.oauth_token_secret = token['oauth_token_secret'][0]
         return {'oauth_token': self.oauth_token, 'oauth_token_secret': self.oauth_token_secret}, r
 
-    def access_token(self, token):
+    async def access_token(self, token):
         url = self.oauth_endpoint + '/oauth/access_token'
         authorization = self.o.gen_authorization(
             {'url': url, 'method': 'GET'},
             {'key': token['oauth_token'], 'secret': token['oauth_token_secret']}
         )
 
-        r = requests.get(
-            url,
-            headers={'Authorization': authorization},
-            timeout=10
-        )
+        async with httpx.AsyncClient() as client:
+            r = await client.get(
+                url,
+                headers={'Authorization': authorization},
+                timeout=10
+            )
 
         if r.status_code != 200:
             return None, r
@@ -71,7 +73,7 @@ class Fanfou:
         self.oauth_token_secret = token['oauth_token_secret'][0]
         return {'oauth_token': self.oauth_token, 'oauth_token_secret': self.oauth_token_secret}, r
 
-    def xauth(self):
+    async def xauth(self):
         url = self.oauth_endpoint + '/oauth/access_token'
         params = {
             'x_auth_mode': 'client_auth',
@@ -80,15 +82,16 @@ class Fanfou:
         }
         authorization = self.o.gen_authorization({'url': url, 'method': 'POST'})
 
-        r = requests.post(
-            url,
-            headers={
-                'Authorization': authorization,
-                'Content-Type': 'application/x-www-form-urlencoded'
-            },
-            data=params,
-            timeout=10
-        )
+        async with httpx.AsyncClient() as client:
+            r = await client.post(
+                url,
+                headers={
+                    'Authorization': authorization,
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                data=params,
+                timeout=10
+            )
 
         if r.status_code != 200:
             return None, r
@@ -98,7 +101,7 @@ class Fanfou:
         self.oauth_token_secret = token['oauth_token_secret'][0]
         return {'oauth_token': self.oauth_token, 'oauth_token_secret': self.oauth_token_secret}, r
 
-    def get(self, uri, params=None):
+    async def get(self, uri, params=None):
         params = params or {}
         url = self.api_endpoint + uri + '.json'
 
@@ -106,21 +109,21 @@ class Fanfou:
             url += '?%s' % parse.urlencode(params)
 
         authorization = self.o.gen_authorization({'url': url, 'method': 'GET'}, self.access_oauth_token)
-        r = requests.get(
-            url,
-            headers={
-                'Authorization': authorization,
-                'Content-Type': 'application/x-www-form-urlencoded'
-            },
-            timeout=10
-        )
+        async with httpx.AsyncClient() as client:
+            r = await client.get(
+                url,
+                headers={
+                    'Authorization': authorization,
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                timeout=10
+            )
 
         if r.status_code != 200:
             return None, r
         return r.json(), r
 
-
-    def post_text(self, uri: str, params: dict=None):
+    async def post_text(self, uri: str, params: dict = None):
         params = params or {}
         url = f"{self.api_endpoint}{uri}.json"
 
@@ -134,20 +137,20 @@ class Fanfou:
             'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
         }
 
-        r = requests.post(
-            url,
-            headers=headers,
-            data=params,
-            timeout=10
-        )
+        async with httpx.AsyncClient() as client:
+            r = await client.post(
+                url,
+                headers=headers,
+                data=params,
+                timeout=10
+            )
 
         if r.status_code != 200:
             return None, r
 
         return r.json(), r
 
-
-    def post_photo(self, uri: str, files: dict=None, params: dict=None):
+    async def post_photo(self, uri: str, files: dict = None, params: dict = None):
         url = f"{self.api_endpoint}{uri}.json"
 
         authorization = self.o.gen_authorization(
@@ -159,13 +162,14 @@ class Fanfou:
             'Authorization': authorization,
         }
 
-        r = requests.post(
-            url,
-            headers=headers,
-            data=params,
-            files=files,
-            timeout=10
-        )
+        async with httpx.AsyncClient() as client:
+            r = await client.post(
+                url,
+                headers=headers,
+                data=params,
+                files=files,
+                timeout=10
+            )
 
         if r.status_code != 200:
             return None, r

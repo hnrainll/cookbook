@@ -6,19 +6,20 @@ AuthService - 多平台 OAuth 授权管理服务
 - /logout <platform> → 移除授权
 - /auth?platform=xxx&oauth_token=xxx → OAuth 回调
 """
-from typing import Optional, Protocol
+from typing import Optional, Protocol, runtime_checkable
 
 from loguru import logger
 
 
+@runtime_checkable
 class AuthHandler(Protocol):
     """各平台实现的认证处理器接口"""
 
-    def gen_auth_url(self, user_id: str) -> str:
+    async def gen_auth_url(self, user_id: str) -> str:
         """生成 OAuth 授权 URL"""
         ...
 
-    def handle_callback(self, params: dict) -> tuple[str, Optional[str]]:
+    async def handle_callback(self, params: dict) -> tuple[str, Optional[str]]:
         """
         处理 OAuth 回调
 
@@ -27,7 +28,7 @@ class AuthHandler(Protocol):
         """
         ...
 
-    def remove_auth(self, user_id: str) -> bool:
+    async def remove_auth(self, user_id: str) -> bool:
         """移除用户授权"""
         ...
 
@@ -53,7 +54,7 @@ class AuthService:
         """列出所有已注册的平台"""
         return list(self._handlers.keys())
 
-    def start_auth(self, platform: str, user_id: str) -> str:
+    async def start_auth(self, platform: str, user_id: str) -> str:
         """
         开始授权流程，返回授权 URL 或提示信息
 
@@ -65,9 +66,9 @@ class AuthService:
         if not handler:
             available = ", ".join(self.list_platforms()) or "无"
             return f"未知平台: {platform}\n可用平台: {available}"
-        return handler.gen_auth_url(user_id)
+        return await handler.gen_auth_url(user_id)
 
-    def handle_callback(self, platform: str, params: dict) -> tuple[str, Optional[str]]:
+    async def handle_callback(self, platform: str, params: dict) -> tuple[str, Optional[str]]:
         """
         处理 OAuth 回调
 
@@ -77,14 +78,14 @@ class AuthService:
         handler = self._handlers.get(platform)
         if not handler:
             return f"未知平台: {platform}", None
-        return handler.handle_callback(params)
+        return await handler.handle_callback(params)
 
-    def remove_auth(self, platform: str, user_id: str) -> bool:
+    async def remove_auth(self, platform: str, user_id: str) -> bool:
         """移除用户在指定平台的授权"""
         handler = self._handlers.get(platform)
         if not handler:
             return False
-        return handler.remove_auth(user_id)
+        return await handler.remove_auth(user_id)
 
     @classmethod
     def get_instance(cls) -> Optional["AuthService"]:

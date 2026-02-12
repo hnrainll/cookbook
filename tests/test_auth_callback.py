@@ -1,9 +1,4 @@
 """Tests for OAuth callback route"""
-import asyncio
-import json
-import os
-import tempfile
-
 import pytest
 from fastapi.testclient import TestClient
 
@@ -18,6 +13,19 @@ def reset_singletons():
     yield
     AuthService.reset_instance()
     ReplyService.reset_instance()
+
+
+class MockHandler:
+    async def gen_auth_url(self, user_id):
+        return "https://example.com/auth"
+
+    async def handle_callback(self, params):
+        if params.get("oauth_token") == "valid":
+            return "授权成功", "user1"
+        return "授权失败", None
+
+    async def remove_auth(self, user_id):
+        return True
 
 
 class TestOAuthCallback:
@@ -47,7 +55,6 @@ class TestOAuthCallback:
         app = FastAPI()
         app.include_router(router)
 
-        # Don't create AuthService
         client = TestClient(app)
         response = client.get("/auth?oauth_token=test")
         assert response.status_code == 200
@@ -65,22 +72,8 @@ class TestOAuthCallback:
         auth_svc = AuthService.create_instance()
         reply_svc = ReplyService.create_instance()
 
-        # Register mock handler
-        class MockHandler:
-            def gen_auth_url(self, user_id):
-                return "https://example.com/auth"
-
-            def handle_callback(self, params):
-                if params.get("oauth_token") == "valid":
-                    return "授权成功", "user1"
-                return "授权失败", None
-
-            def remove_auth(self, user_id):
-                return True
-
         auth_svc.register("fanfou", MockHandler())
 
-        # Register reply handler to capture notifications
         sent = []
         from app.schemas.event import MessageSource
         reply_svc.register(
@@ -108,18 +101,18 @@ class TestOAuthCallback:
 
         callbacks = []
 
-        class MockHandler:
-            def gen_auth_url(self, user_id):
+        class TrackingHandler:
+            async def gen_auth_url(self, user_id):
                 return ""
 
-            def handle_callback(self, params):
+            async def handle_callback(self, params):
                 callbacks.append(params)
                 return "ok", None
 
-            def remove_auth(self, user_id):
+            async def remove_auth(self, user_id):
                 return True
 
-        auth_svc.register("fanfou", MockHandler())
+        auth_svc.register("fanfou", TrackingHandler())
 
         client = TestClient(app)
         client.get("/auth?oauth_token=tok123")

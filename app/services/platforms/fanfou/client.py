@@ -8,9 +8,7 @@ Fanfou 平台消费者 - 接收统一消息并发送到 Fanfou
 3. 处理 OAuth 1.0a 认证（通过 FanfouAuthHandler）
 4. 通过 ReplyService 回复用户处理结果
 """
-import asyncio
 import json
-import os
 from typing import ClassVar, Optional
 
 from loguru import logger
@@ -27,7 +25,7 @@ class FanfouAuthHandler:
     Fanfou OAuth 认证处理器
 
     实现 AuthHandler 协议，由 AuthService 调用。
-    Token 存储委托给 TokenManager（数据库）。
+    Token 存储委托给 DatabaseManager。
     """
 
     def __init__(self):
@@ -35,26 +33,24 @@ class FanfouAuthHandler:
         self.consumer_secret = settings.fanfou_consumer_secret
         self.oauth_callback = settings.fanfou_oauth_callback
 
-    def gen_auth_url(self, user_id: str) -> str:
+    async def gen_auth_url(self, user_id: str) -> str:
         """生成 Fanfou OAuth 授权 URL"""
         ff = Fanfou(
             consumer_key=self.consumer_key,
             consumer_secret=self.consumer_secret,
         )
-        token, _ = ff.request_token()
+        token, _ = await ff.request_token()
 
         # 保存 request token 到数据库
         from app.services.storage.db import DatabaseManager
         db = DatabaseManager.get_instance()
         if db:
-            asyncio.get_event_loop().run_until_complete(
-                db.save_request_token(
-                    oauth_token=ff.oauth_token,
-                    source_platform="feishu",
-                    source_user_id=user_id,
-                    sink_platform="fanfou",
-                    token_data=json.dumps(token),
-                )
+            await db.save_request_token(
+                oauth_token=ff.oauth_token,
+                source_platform="feishu",
+                source_user_id=user_id,
+                sink_platform="fanfou",
+                token_data=json.dumps(token),
             )
 
         url = (
@@ -64,7 +60,7 @@ class FanfouAuthHandler:
         )
         return url
 
-    def handle_callback(self, params: dict) -> tuple[str, Optional[str]]:
+    async def handle_callback(self, params: dict) -> tuple[str, Optional[str]]:
         """处理 OAuth 回调，交换 access token"""
         oauth_token = params.get("oauth_token")
         if not oauth_token:
@@ -75,9 +71,7 @@ class FanfouAuthHandler:
         if not db:
             return "授权失败：数据库未初始化", None
 
-        # 获取 request token
-        loop = asyncio.get_event_loop()
-        request_record = loop.run_until_complete(db.get_request_token(oauth_token))
+        request_record = await db.get_request_token(oauth_token)
         if not request_record:
             return "授权失败：request token 不存在或已过期", None
 
@@ -90,37 +84,31 @@ class FanfouAuthHandler:
             consumer_key=self.consumer_key,
             consumer_secret=self.consumer_secret,
         )
-        access_token, response = ff.access_token(token)
+        access_token, response = await ff.access_token(token)
 
         # 清理 request token
-        loop.run_until_complete(db.delete_request_token(oauth_token))
+        await db.delete_request_token(oauth_token)
 
         if access_token:
-            # 保存 user token
-            loop.run_until_complete(
-                db.save_user_token(
-                    source_platform=source_platform,
-                    source_user_id=source_user_id,
-                    sink_platform="fanfou",
-                    token_data=json.dumps(access_token),
-                )
+            await db.save_user_token(
+                source_platform=source_platform,
+                source_user_id=source_user_id,
+                sink_platform="fanfou",
+                token_data=json.dumps(access_token),
             )
             return "授权成功", source_user_id
         return "授权失败", None
 
-    def remove_auth(self, user_id: str) -> bool:
+    async def remove_auth(self, user_id: str) -> bool:
         """移除用户的 Fanfou 授权"""
         from app.services.storage.db import DatabaseManager
         db = DatabaseManager.get_instance()
         if not db:
             return False
-        loop = asyncio.get_event_loop()
-        return loop.run_until_complete(
-            db.delete_user_token(
-                source_platform="feishu",
-                source_user_id=user_id,
-                sink_platform="fanfou",
-            )
+        return await db.delete_user_token(
+            source_platform="feishu",
+            source_user_id=user_id,
+            sink_platform="fanfou",
         )
 
 
@@ -166,76 +154,24 @@ class FanfouClient:
             oauth_token_secret=token["oauth_token_secret"],
         )
 
-    def _post_text_sync(self, ff: Fanfou, text: str) -> Optional[dict]:
-        """发文本到 Fanfou（同步调用）"""
-        ret, response = ff.post_text("/statuses/update", {"status": text})
-        return ret
-
-    def _post_photo_sync(
-        self, ff: Fanfou, image_data: bytes, text: Optional[str] = None
-    ) -> Optional[dict]:
-        """发图片到 Fanfou（同步调用）"""
-        files = {"photo": image_data}
-        params = {"status": text} if text else {}
-        ret, response = ff.post_photo("/photos/upload", files, params)
-        return ret
-
-    def post_text(self, source_platform: str, user_id: str, text: str) -> Optional[dict]:
-        """发文本到 Fanfou（同步，用于外部直接调用）"""
-        from app.services.storage.db import DatabaseManager
-        db = DatabaseManager.get_instance()
-        if not db:
+    async def post_text(self, source_platform: str, user_id: str, text: str) -> Optional[dict]:
+        """发文本到 Fanfou"""
+        ff = await self._get_fanfou_for_user(source_platform, user_id)
+        if not ff:
             return None
-
-        loop = asyncio.new_event_loop()
-        try:
-            token_data = loop.run_until_complete(
-                db.get_user_token(source_platform, user_id, "fanfou")
-            )
-        finally:
-            loop.close()
-        if not token_data:
-            return None
-
-        token = json.loads(token_data)
-        ff = Fanfou(
-            consumer_key=self.consumer_key,
-            consumer_secret=self.consumer_secret,
-            oauth_token=token["oauth_token"],
-            oauth_token_secret=token["oauth_token_secret"],
-        )
-        ret, response = ff.post_text("/statuses/update", {"status": text})
+        ret, response = await ff.post_text("/statuses/update", {"status": text})
         return ret
 
-    def post_photo(
+    async def post_photo(
         self, source_platform: str, user_id: str, image_data: bytes, text: Optional[str] = None
     ) -> Optional[dict]:
-        """发图片到 Fanfou（同步，用于外部直接调用）"""
-        from app.services.storage.db import DatabaseManager
-        db = DatabaseManager.get_instance()
-        if not db:
+        """发图片到 Fanfou"""
+        ff = await self._get_fanfou_for_user(source_platform, user_id)
+        if not ff:
             return None
-
-        loop = asyncio.new_event_loop()
-        try:
-            token_data = loop.run_until_complete(
-                db.get_user_token(source_platform, user_id, "fanfou")
-            )
-        finally:
-            loop.close()
-        if not token_data:
-            return None
-
-        token = json.loads(token_data)
-        ff = Fanfou(
-            consumer_key=self.consumer_key,
-            consumer_secret=self.consumer_secret,
-            oauth_token=token["oauth_token"],
-            oauth_token_secret=token["oauth_token_secret"],
-        )
         files = {"photo": image_data}
         params = {"status": text} if text else {}
-        ret, response = ff.post_photo("/photos/upload", files, params)
+        ret, response = await ff.post_photo("/photos/upload", files, params)
         return ret
 
     async def handle_message(self, message: UnifiedMessage) -> None:
@@ -247,7 +183,6 @@ class FanfouClient:
         - image 消息 → post_photo → 回复结果
         """
         try:
-            # 命令消息由 AuthService 处理，不在这里处理
             if message.command:
                 await self._handle_command(message)
                 return
@@ -284,17 +219,13 @@ class FanfouClient:
 
         if cmd == "/login":
             if len(parts) < 2:
-                # 列出可用平台
                 platforms = auth_service.list_platforms()
                 text = "可用平台: " + ", ".join(platforms) if platforms else "暂无可用平台"
                 reply_service.reply(message, text)
                 return
 
             platform = parts[1]
-            loop = asyncio.get_running_loop()
-            url = await loop.run_in_executor(
-                None, auth_service.start_auth, platform, message.sender_id
-            )
+            url = await auth_service.start_auth(platform, message.sender_id)
             reply_service.reply(message, f"请点击如下链接并授权登录。\n{url}")
 
         elif cmd == "/logout":
@@ -303,10 +234,7 @@ class FanfouClient:
                 return
 
             platform = parts[1]
-            loop = asyncio.get_running_loop()
-            success = await loop.run_in_executor(
-                None, auth_service.remove_auth, platform, message.sender_id
-            )
+            success = await auth_service.remove_auth(platform, message.sender_id)
             reply_service.reply(message, "登出成功" if success else "登出失败")
 
     async def _handle_text(self, message: UnifiedMessage, source_platform: str, user_id: str) -> None:
@@ -314,16 +242,8 @@ class FanfouClient:
         from app.core.reply import ReplyService
         reply_service = ReplyService.get_instance()
 
-        ff = await self._get_fanfou_for_user(source_platform, user_id)
-        if ff:
-            loop = asyncio.get_running_loop()
-            ret = await loop.run_in_executor(
-                None, self._post_text_sync, ff, message.content
-            )
-        else:
-            ret = None
+        ret = await self.post_text(source_platform, user_id, message.content)
 
-        # 保存 sink 结果
         await self._save_sink_result(message, ret)
 
         if reply_service and ret:
@@ -345,14 +265,7 @@ class FanfouClient:
             return
 
         text = message.content if message.content else None
-        ff = await self._get_fanfou_for_user(source_platform, user_id)
-        if ff:
-            loop = asyncio.get_running_loop()
-            ret = await loop.run_in_executor(
-                None, self._post_photo_sync, ff, message.image_data, text
-            )
-        else:
-            ret = None
+        ret = await self.post_photo(source_platform, user_id, message.image_data, text)
 
         await self._save_sink_result(message, ret)
 
