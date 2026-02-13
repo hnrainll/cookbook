@@ -109,7 +109,6 @@ def compress_image_advanced(image_bytes, target_size_mb=2, max_dimension=None):
     return output.getvalue()
 
 
-# 二分查找最佳质量参数
 def _get_compressed_size(img, quality):
     output = io.BytesIO()
     img.save(output, format='JPEG', quality=quality, optimize=True)
