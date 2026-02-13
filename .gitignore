@@ -46,3 +46,5 @@ data/
 logs/
 
 *.log
+
+app.pid
