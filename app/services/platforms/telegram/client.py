@@ -95,17 +95,24 @@ class TelegramClient:
             logger.debug(f"Skipping non-text message from {message.from_user.id}")
             return
         
-        # 跳过命令消息（已在 handle_start 中处理）
+        # 识别命令消息（/login fanfou, /logout fanfou 等）
+        command = None
+        content = message.text
         if message.text.startswith("/"):
-            return
-        
+            # /start 由专用 handler 处理
+            if message.text.strip() == "/start":
+                return
+            command = message.text
+            content = message.text
+
         # 构建统一消息对象
         unified_msg = UnifiedMessage(
             source=MessageSource.TELEGRAM,
-            content=message.text,
+            content=content,
             sender_id=str(message.from_user.id),
             sender_name=message.from_user.full_name,
             chat_id=str(message.chat.id),
+            command=command,
             raw_data={
                 "message_id": message.message_id,
                 "chat_type": message.chat.type,
