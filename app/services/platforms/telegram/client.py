@@ -39,6 +39,7 @@ class TelegramClient:
         self.dp: Optional[Dispatcher] = None
         self._polling_task: Optional[asyncio.Task] = None
         self._channel_id: str = settings.telegram_channel_id
+        self._channel_name: str = ""
 
         logger.info("TelegramClient initialized")
     
@@ -149,6 +150,17 @@ class TelegramClient:
             # 获取 Bot 信息
             bot_info = await self.bot.get_me()
             logger.info(f"Telegram bot started: @{bot_info.username} ({bot_info.id})")
+
+            # 获取频道名称
+            if self._channel_id:
+                try:
+                    channel_id = self._channel_id if self._channel_id.startswith("@") else int(self._channel_id)
+                    chat_info = await self.bot.get_chat(channel_id)
+                    self._channel_name = chat_info.title or self._channel_id
+                    logger.info(f"Telegram channel resolved: {self._channel_name}")
+                except Exception as e:
+                    logger.warning(f"Failed to get channel info: {e}")
+                    self._channel_name = self._channel_id
             
             # 启动 polling
             logger.info("Starting Telegram polling...")
@@ -161,41 +173,45 @@ class TelegramClient:
     async def _run_polling(self) -> None:
         """
         运行 polling 循环
-        
+
         这个方法会持续运行，直到调用 stop()
+        handle_signals=False 避免与 uvicorn 的信号处理冲突
         """
         try:
             assert self.dp is not None, "Dispatcher not initialized"
             assert self.bot is not None, "Bot not initialized"
             await self.dp.start_polling(
                 self.bot,
-                allowed_updates=["message"]  # 只接收消息更新
+                allowed_updates=["message"],
+                handle_signals=False,
             )
         except asyncio.CancelledError:
             logger.info("Telegram polling cancelled")
         except Exception as e:
             logger.error(f"Error in Telegram polling: {e}", exc_info=True)
-    
+
     async def stop(self) -> None:
         """停止 Telegram 客户端"""
         if not self._polling_task or self._polling_task.done():
             logger.warning("Telegram client not running")
             return
-        
+
         logger.info("Stopping Telegram client...")
-        
-        # 取消 polling 任务
+
+        # 通知 dispatcher 停止 polling，再取消任务
+        if self.dp:
+            await self.dp.stop_polling()
         self._polling_task.cancel()
-        
+
         try:
             await self._polling_task
         except asyncio.CancelledError:
             pass
-        
+
         # 关闭 Bot session
         if self.bot:
             await self.bot.session.close()
-        
+
         logger.info("Telegram client stopped")
     
     # ===== Sink 功能：转发消息到 Telegram 频道 =====
@@ -235,9 +251,9 @@ class TelegramClient:
         await self._save_sink_result(message, ret)
 
         if reply_service and ret:
-            reply_service.reply(message, f"[Telegram 频道] 消息发送成功")
+            reply_service.reply(message, f"[{self._channel_name}] 消息发送成功")
         elif reply_service:
-            reply_service.reply(message, "[Telegram 频道] 消息发送失败")
+            reply_service.reply(message, f"[{self._channel_name}] 消息发送失败")
 
     async def _sink_image(self, message: UnifiedMessage, source_platform: str) -> None:
         """转发图片消息到频道"""
@@ -246,7 +262,7 @@ class TelegramClient:
 
         if not message.image_data:
             if reply_service:
-                reply_service.reply(message, "[Telegram 频道] 图片数据为空，无法发送。")
+                reply_service.reply(message, f"[{self._channel_name}] 图片数据为空，无法发送。")
             return
 
         caption = self._format_channel_message(message) if message.content else None
@@ -255,14 +271,13 @@ class TelegramClient:
         await self._save_sink_result(message, ret)
 
         if reply_service and ret:
-            reply_service.reply(message, f"[Telegram 频道] 图片发送成功")
+            reply_service.reply(message, f"[{self._channel_name}] 图片发送成功")
         elif reply_service:
-            reply_service.reply(message, "[Telegram 频道] 图片发送失败")
+            reply_service.reply(message, f"[{self._channel_name}] 图片发送失败")
 
     def _format_channel_message(self, message: UnifiedMessage) -> str:
-        """格式化频道消息，附带来源信息"""
-        sender = message.sender_name or message.sender_id
-        return f"{message.content}\n\n—— {sender} via {message.source}"
+        """格式化频道消息"""
+        return message.content
 
     async def _send_to_channel(
         self,
