@@ -70,7 +70,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
             fanfou_auth_handler = FanfouAuthHandler()
             auth_service.register("fanfou", fanfou_auth_handler)
 
-        # Step 4: Telegram Source
+        # Step 4: Telegram Source + Sink
         if settings.telegram_enabled:
             logger.info("Initializing Telegram client...")
             from app.services.platforms.telegram.client import TelegramClient
@@ -84,6 +84,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
                 reply_handler=telegram_client.reply_to_message,
                 send_handler=telegram_client.send_to_user,
             )
+
+            # 注册 Telegram Sink（转发消息到频道）
+            if settings.telegram_channel_id:
+                from app.core.bus import bus as event_bus
+                event_bus.register(telegram_client.handle_message)
+                logger.info(f"Telegram channel sink registered, channel_id={settings.telegram_channel_id}")
 
         # Step 5: Feishu Source
         if settings.feishu_enabled:

@@ -2,16 +2,18 @@
 Telegram Platform Adapter
 Telegram 平台适配器 - 使用 aiogram 异步客户端
 
-相比飞书，Telegram 的实现要简单得多：
-- aiogram 是原生异步库，直接兼容 asyncio
-- 不需要线程隔离或 Monkey Patch
-- 使用 polling 方式接收消息（也可以使用 webhook）
+职责：
+1. Source: 通过 polling 接收 Telegram 消息，转换为 UnifiedMessage 发布到事件总线
+2. Sink: 监听事件总线消息，转发到配置的 Telegram 频道/群组
 """
 import asyncio
+import json
 from typing import ClassVar, Optional
 
 from aiogram import Bot, Dispatcher, types
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.filters import Command
+from aiogram.types import BufferedInputFile
 from loguru import logger
 
 from app.core.bus import bus
@@ -36,7 +38,8 @@ class TelegramClient:
         self.bot: Optional[Bot] = None
         self.dp: Optional[Dispatcher] = None
         self._polling_task: Optional[asyncio.Task] = None
-        
+        self._channel_id: str = settings.telegram_channel_id
+
         logger.info("TelegramClient initialized")
     
     def _setup_handlers(self) -> None:
@@ -135,8 +138,9 @@ class TelegramClient:
             return
         
         try:
-            # 初始化 Bot 和 Dispatcher
-            self.bot = Bot(token=settings.telegram_bot_token)
+            # 初始化 Bot 和 Dispatcher（支持代理）
+            session = AiohttpSession(proxy=settings.telegram_proxy) if settings.telegram_proxy else None
+            self.bot = Bot(token=settings.telegram_bot_token, session=session)
             self.dp = Dispatcher()
             
             # 注册处理器
@@ -194,6 +198,131 @@ class TelegramClient:
         
         logger.info("Telegram client stopped")
     
+    # ===== Sink 功能：转发消息到 Telegram 频道 =====
+
+    async def handle_message(self, message: UnifiedMessage) -> None:
+        """
+        事件总线回调：将消息转发到配置的 Telegram 频道
+
+        支持文本和图片消息。command 消息不转发。
+        """
+        if not self.bot or not self._channel_id:
+            return
+
+        if message.command:
+            return
+
+        try:
+            source_platform = message.source
+            if message.message_type == "text":
+                await self._sink_text(message, source_platform)
+            elif message.message_type in ("image", "post"):
+                await self._sink_image(message, source_platform)
+            else:
+                logger.debug(f"TelegramSink: skipping message type '{message.message_type}'")
+        except Exception as e:
+            logger.error(f"TelegramSink handle_message error: {e}", exc_info=True)
+            raise
+
+    async def _sink_text(self, message: UnifiedMessage, source_platform: str) -> None:
+        """转发文本消息到频道"""
+        from app.core.reply import ReplyService
+        reply_service = ReplyService.get_instance()
+
+        text = self._format_channel_message(message)
+        ret = await self._send_to_channel(text=text)
+
+        await self._save_sink_result(message, ret)
+
+        if reply_service and ret:
+            reply_service.reply(message, f"[Telegram 频道] 消息发送成功")
+        elif reply_service:
+            reply_service.reply(message, "[Telegram 频道] 消息发送失败")
+
+    async def _sink_image(self, message: UnifiedMessage, source_platform: str) -> None:
+        """转发图片消息到频道"""
+        from app.core.reply import ReplyService
+        reply_service = ReplyService.get_instance()
+
+        if not message.image_data:
+            if reply_service:
+                reply_service.reply(message, "[Telegram 频道] 图片数据为空，无法发送。")
+            return
+
+        caption = self._format_channel_message(message) if message.content else None
+        ret = await self._send_to_channel(image_data=message.image_data, caption=caption)
+
+        await self._save_sink_result(message, ret)
+
+        if reply_service and ret:
+            reply_service.reply(message, f"[Telegram 频道] 图片发送成功")
+        elif reply_service:
+            reply_service.reply(message, "[Telegram 频道] 图片发送失败")
+
+    def _format_channel_message(self, message: UnifiedMessage) -> str:
+        """格式化频道消息，附带来源信息"""
+        sender = message.sender_name or message.sender_id
+        return f"{message.content}\n\n—— {sender} via {message.source}"
+
+    async def _send_to_channel(
+        self,
+        text: Optional[str] = None,
+        image_data: Optional[bytes] = None,
+        caption: Optional[str] = None,
+    ) -> Optional[dict]:
+        """发送消息到 Telegram 频道，返回结果 dict 或 None"""
+        try:
+            channel_id = self._channel_id if self._channel_id.startswith("@") else int(self._channel_id)
+
+            if image_data:
+                photo = BufferedInputFile(image_data, filename="image.jpg")
+                result = await self.bot.send_photo(
+                    chat_id=channel_id,
+                    photo=photo,
+                    caption=caption,
+                )
+            elif text:
+                result = await self.bot.send_message(
+                    chat_id=channel_id,
+                    text=text,
+                )
+            else:
+                return None
+
+            return {
+                "message_id": result.message_id,
+                "chat_id": result.chat.id,
+                "date": result.date.isoformat() if result.date else None,
+            }
+        except Exception as e:
+            logger.error(f"TelegramSink send to channel failed: {e}", exc_info=True)
+            return None
+
+    async def _save_sink_result(self, message: UnifiedMessage, ret: Optional[dict]) -> None:
+        """保存发送结果到数据库"""
+        from app.services.storage.db import DatabaseManager
+        db = DatabaseManager.get_instance()
+        if not db:
+            return
+
+        if ret:
+            await db.save_sink_result(
+                event_id=str(message.event_id),
+                sink_platform="telegram",
+                status_id=str(ret.get("message_id", "")),
+                response_data=json.dumps(ret, ensure_ascii=False),
+                success=True,
+            )
+        else:
+            await db.save_sink_result(
+                event_id=str(message.event_id),
+                sink_platform="telegram",
+                success=False,
+                error_message="发送到 Telegram 频道失败",
+            )
+
+    # ===== Reply 功能：供 ReplyService 调用 =====
+
     def reply_to_message(self, message: "UnifiedMessage", text: str) -> None:
         """供 ReplyService 调用：回复用户消息"""
         if not self.bot:

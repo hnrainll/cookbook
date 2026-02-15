@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 1
 requires-python = ">=3.12"
 
 [[package]]
@@ -120,6 +120,19 @@ wheels = [
     { url = "https://mirrors.aliyun.com/pypi/packages/3c/5f/24155e30ba7f8c96918af1350eb0663e2430aad9e001c0489d89cd708ab1/aiohttp-3.13.3-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:fc353029f176fd2b3ec6cfc71be166aba1936fe5d73dd1992ce289ca6647a9aa" },
     { url = "https://mirrors.aliyun.com/pypi/packages/eb/f8/7314031ff5c10e6ece114da79b338ec17eeff3a079e53151f7e9f43c4723/aiohttp-3.13.3-cp314-cp314t-win32.whl", hash = "sha256:2e41b18a58da1e474a057b3d35248d8320029f61d70a37629535b16a0c8f3767" },
     { url = "https://mirrors.aliyun.com/pypi/packages/b4/63/278a98c715ae467624eafe375542d8ba9b4383a016df8fdefe0ae28382a7/aiohttp-3.13.3-cp314-cp314t-win_amd64.whl", hash = "sha256:44531a36aa2264a1860089ffd4dce7baf875ee5a6079d5fb42e261c704ef7344" },
+]
+
+[[package]]
+name = "aiohttp-socks"
+version = "0.11.0"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "python-socks" },
+]
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/1f/cc/e5bbd54f76bd56291522251e47267b645dac76327b2657ade9545e30522c/aiohttp_socks-0.11.0.tar.gz", hash = "sha256:0afe51638527c79077e4bd6e57052c87c4824233d6e20bb061c53766421b10f0" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/bf/7d/4b633d709b8901d59444d2e512b93e72fe62d2b492a040097c3f7ba017bb/aiohttp_socks-0.11.0-py3-none-any.whl", hash = "sha256:9aacce57c931b8fbf8f6d333cf3cafe4c35b971b35430309e167a35a8aab9ec1" },
 ]
 
 [[package]]
@@ -247,6 +260,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "aiogram" },
+    { name = "aiohttp-socks" },
     { name = "aiosqlite" },
     { name = "fastapi" },
     { name = "gunicorn" },
@@ -270,6 +284,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiogram", specifier = ">=3.0.0" },
+    { name = "aiohttp-socks", specifier = ">=0.11.0" },
     { name = "aiosqlite", specifier = ">=0.20.0" },
     { name = "fastapi", specifier = ">=0.115.12" },
     { name = "gunicorn", specifier = ">=23.0.0" },
@@ -950,6 +965,15 @@ source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
 sdist = { url = "https://mirrors.aliyun.com/pypi/packages/88/2c/7bb1416c5620485aa793f2de31d3df393d3686aa8a8506d11e10e13c5baf/python_dotenv-1.1.0.tar.gz", hash = "sha256:41f90bc6f5f177fb41f53e87666db362025010eb28f60a01c9143bfa33a2b2d5" }
 wheels = [
     { url = "https://mirrors.aliyun.com/pypi/packages/1e/18/98a99ad95133c6a6e2005fe89faedf294a748bd5dc803008059409ac9b1e/python_dotenv-1.1.0-py3-none-any.whl", hash = "sha256:d7c01d9e2293916c18baf562d95698754b0dbbb5e74d457c45d4f6561fb9d55d" },
+]
+
+[[package]]
+name = "python-socks"
+version = "2.8.0"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/6c/07/cfdd6a846ac859e513b4e68bb6c669a90a74d89d8d405516fba7fc9c6f0c/python_socks-2.8.0.tar.gz", hash = "sha256:340f82778b20a290bdd538ee47492978d603dff7826aaf2ce362d21ad9ee6f1b" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/13/10/e2b575faa32d1d32e5e6041fc64794fa9f09526852a06b25353b66f52cae/python_socks-2.8.0-py3-none-any.whl", hash = "sha256:57c24b416569ccea493a101d38b0c82ed54be603aa50b6afbe64c46e4a4e4315" },
 ]
 
 [[package]]

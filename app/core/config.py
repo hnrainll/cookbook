@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     # ===== Telegram 配置 =====
     telegram_enabled: bool = Field(default=False, description="是否启用 Telegram 集成")
     telegram_bot_token: str = Field(default="", description="Telegram Bot Token")
+    telegram_channel_id: str = Field(default="", description="Telegram 频道/群组 ID，用于消息同步")
+    telegram_proxy: str = Field(default="", description="Telegram 代理地址，如 http://127.0.0.1:7897")
     
     # ===== Fanfou 配置 =====
     fanfou_enabled: bool = Field(default=False, description="是否启用 Fanfou 集成")
