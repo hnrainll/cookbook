@@ -302,16 +302,17 @@ class DatabaseManager:
             logger.error(f"Failed to save user token: {e}")
             return False
 
-    async def get_user_token(
-        self, source_platform: str, source_user_id: str, sink_platform: str
-    ) -> Optional[str]:
-        """获取用户 token_data JSON 字符串"""
+
+    async def get_any_token_for_sink(self, sink_platform: str) -> Optional[str]:
+        """获取任意一个可用的 sink token（不限来源平台）"""
         if not self.conn:
             return None
         cursor = await self.conn.execute("""
             SELECT token_data FROM auth_tokens
-            WHERE source_platform = ? AND source_user_id = ? AND sink_platform = ?
-        """, (source_platform, source_user_id, sink_platform))
+            WHERE sink_platform = ?
+            ORDER BY updated_at DESC
+            LIMIT 1
+        """, (sink_platform,))
         row = await cursor.fetchone()
         return row[0] if row else None
 

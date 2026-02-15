@@ -135,14 +135,14 @@ class FanfouClient:
     async def stop(self) -> None:
         logger.info("Fanfou client stopped")
 
-    async def _get_fanfou_for_user(self, source_platform: str, user_id: str) -> Optional[Fanfou]:
-        """获取已授权用户的 Fanfou 实例"""
+    async def _get_fanfou(self) -> Optional[Fanfou]:
+        """获取已授权的 Fanfou 实例"""
         from app.services.storage.db import DatabaseManager
         db = DatabaseManager.get_instance()
         if not db:
             return None
 
-        token_data = await db.get_user_token(source_platform, user_id, "fanfou")
+        token_data = await db.get_any_token_for_sink("fanfou")
         if not token_data:
             return None
 
@@ -154,19 +154,17 @@ class FanfouClient:
             oauth_token_secret=token["oauth_token_secret"],
         )
 
-    async def post_text(self, source_platform: str, user_id: str, text: str) -> Optional[dict]:
+    async def post_text(self, text: str) -> Optional[dict]:
         """发文本到 Fanfou"""
-        ff = await self._get_fanfou_for_user(source_platform, user_id)
+        ff = await self._get_fanfou()
         if not ff:
             return None
         ret, response = await ff.post_text("/statuses/update", {"status": text})
         return ret
 
-    async def post_photo(
-        self, source_platform: str, user_id: str, image_data: bytes, text: Optional[str] = None
-    ) -> Optional[dict]:
+    async def post_photo(self, image_data: bytes, text: Optional[str] = None) -> Optional[dict]:
         """发图片到 Fanfou"""
-        ff = await self._get_fanfou_for_user(source_platform, user_id)
+        ff = await self._get_fanfou()
         if not ff:
             return None
         files = {"photo": image_data}
@@ -187,13 +185,10 @@ class FanfouClient:
                 await self._handle_command(message)
                 return
 
-            source_platform = message.source
-            user_id = message.sender_id
-
             if message.message_type == "text":
-                await self._handle_text(message, source_platform, user_id)
+                await self._handle_text(message)
             elif message.message_type in ("image", "post"):
-                await self._handle_image(message, source_platform, user_id)
+                await self._handle_image(message)
             else:
                 logger.debug(f"Fanfou: skipping message type '{message.message_type}'")
 
@@ -237,12 +232,12 @@ class FanfouClient:
             success = await auth_service.remove_auth(platform, message.sender_id)
             reply_service.reply(message, "登出成功" if success else "登出失败")
 
-    async def _handle_text(self, message: UnifiedMessage, source_platform: str, user_id: str) -> None:
+    async def _handle_text(self, message: UnifiedMessage) -> None:
         """处理文本消息"""
         from app.core.reply import ReplyService
         reply_service = ReplyService.get_instance()
 
-        ret = await self.post_text(source_platform, user_id, message.content)
+        ret = await self.post_text(message.content)
 
         await self._save_sink_result(message, ret)
 
@@ -254,7 +249,7 @@ class FanfouClient:
         elif reply_service:
             reply_service.reply(message, "消息发送失败")
 
-    async def _handle_image(self, message: UnifiedMessage, source_platform: str, user_id: str) -> None:
+    async def _handle_image(self, message: UnifiedMessage) -> None:
         """处理图片消息"""
         from app.core.reply import ReplyService
         reply_service = ReplyService.get_instance()
@@ -265,7 +260,7 @@ class FanfouClient:
             return
 
         text = message.content if message.content else None
-        ret = await self.post_photo(source_platform, user_id, message.image_data, text)
+        ret = await self.post_photo(message.image_data, text)
 
         await self._save_sink_result(message, ret)
 

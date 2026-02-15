@@ -163,7 +163,7 @@ class TestDatabaseManager:
 
             # Get
             token_data = loop.run_until_complete(
-                db_manager.get_user_token("feishu", "user1", "fanfou")
+                db_manager.get_any_token_for_sink("fanfou")
             )
             assert token_data is not None
             assert "tok" in token_data
@@ -176,7 +176,7 @@ class TestDatabaseManager:
 
             # Get again
             token_data = loop.run_until_complete(
-                db_manager.get_user_token("feishu", "user1", "fanfou")
+                db_manager.get_any_token_for_sink("fanfou")
             )
             assert token_data is None
 
