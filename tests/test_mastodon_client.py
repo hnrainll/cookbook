@@ -118,7 +118,7 @@ class TestMastodonClient:
             )
             loop.run_until_complete(client.handle_message(msg))
 
-        assert replies == ["[Mastodon] 发送成功\n\nhttps://mastodon.social/@user/123"]
+        assert replies == ["[Mastodon] 消息发送成功\n\nhttps://mastodon.social/@user/123"]
 
         async def fetch_row():
             assert mgr.conn is not None
