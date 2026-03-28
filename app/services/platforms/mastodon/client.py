@@ -166,8 +166,8 @@ class MastodonClient:
     def _success_text(self, response_data: dict) -> str:
         url = response_data.get("url") or response_data.get("uri")
         if url:
-            return f"[Mastodon] 发送成功\n\n{url}"
-        return "[Mastodon] 发送成功"
+            return f"[Mastodon] 消息发送成功\n\n{url}"
+        return "[Mastodon] 消息发送成功"
 
     async def _save_sink_result(self, message: UnifiedMessage, ret: Optional[dict]) -> None:
         from app.services.storage.db import DatabaseManager

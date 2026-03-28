@@ -248,9 +248,11 @@ class FanfouClient:
 
         if reply_service and ret:
             status_id = ret.get("id", "")
-            reply_service.reply(message, f"消息发送成功\n\nhttps://fanfou.com/statuses/{status_id}")
+            reply_service.reply(
+                message, f"[饭否] 消息发送成功\n\nhttps://fanfou.com/statuses/{status_id}"
+            )
         elif reply_service:
-            reply_service.reply(message, "消息发送失败")
+            reply_service.reply(message, "[饭否] 消息发送失败")
 
     async def _handle_image(self, message: UnifiedMessage) -> None:
         """处理图片消息"""
@@ -270,9 +272,11 @@ class FanfouClient:
 
         if reply_service and ret:
             status_id = ret.get("id", "")
-            reply_service.reply(message, f"图片发送成功\n\nhttps://fanfou.com/statuses/{status_id}")
+            reply_service.reply(
+                message, f"[饭否] 图片发送成功\n\nhttps://fanfou.com/statuses/{status_id}"
+            )
         elif reply_service:
-            reply_service.reply(message, "图片发送失败")
+            reply_service.reply(message, "[饭否] 图片发送失败")
 
     async def _save_sink_result(self, message: UnifiedMessage, ret: Optional[dict]) -> None:
         """保存发送结果到数据库"""
