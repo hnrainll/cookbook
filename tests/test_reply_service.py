@@ -1,10 +1,10 @@
 """Tests for ReplyService"""
+
 from app.core.reply import ReplyService
 from app.schemas.event import MessageSource, UnifiedMessage
 
 
 class TestReplyService:
-
     def setup_method(self):
         ReplyService.reset_instance()
 

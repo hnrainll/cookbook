@@ -1,9 +1,9 @@
 """Tests for UnifiedMessage schema"""
+
 from app.schemas.event import MessageSource, UnifiedMessage
 
 
 class TestUnifiedMessage:
-
     def test_default_values(self):
         msg = UnifiedMessage(
             source=MessageSource.FEISHU,

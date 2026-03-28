@@ -1,4 +1,5 @@
 """Tests for DatabaseManager"""
+
 import asyncio
 import os
 import tempfile
@@ -21,6 +22,7 @@ def db_path():
 def db_manager(db_path):
     """Create a fresh DatabaseManager for each test (not singleton)."""
     from app.services.storage.db import DatabaseManager
+
     DatabaseManager.reset_instance()
 
     # Directly instantiate without singleton
@@ -30,7 +32,6 @@ def db_manager(db_path):
 
 
 class TestDatabaseManager:
-
     def test_start_creates_tables(self, db_manager):
         loop = asyncio.new_event_loop()
         try:
@@ -103,14 +104,16 @@ class TestDatabaseManager:
         try:
             loop.run_until_complete(db_manager.start())
 
-            result = loop.run_until_complete(db_manager.save_sink_result(
-                event_id="evt1",
-                sink_platform="fanfou",
-                status_id="123",
-                status_url="https://fanfou.com/statuses/123",
-                response_data='{"id":"123"}',
-                success=True,
-            ))
+            result = loop.run_until_complete(
+                db_manager.save_sink_result(
+                    event_id="evt1",
+                    sink_platform="fanfou",
+                    status_id="123",
+                    status_url="https://fanfou.com/statuses/123",
+                    response_data='{"id":"123"}',
+                    success=True,
+                )
+            )
             assert result is True
 
             loop.run_until_complete(db_manager.stop())
@@ -123,13 +126,15 @@ class TestDatabaseManager:
             loop.run_until_complete(db_manager.start())
 
             # Save
-            loop.run_until_complete(db_manager.save_request_token(
-                oauth_token="req_tok_1",
-                source_platform="feishu",
-                source_user_id="user1",
-                sink_platform="fanfou",
-                token_data='{"oauth_token":"req_tok_1","oauth_token_secret":"secret"}',
-            ))
+            loop.run_until_complete(
+                db_manager.save_request_token(
+                    oauth_token="req_tok_1",
+                    source_platform="feishu",
+                    source_user_id="user1",
+                    sink_platform="fanfou",
+                    token_data='{"oauth_token":"req_tok_1","oauth_token_secret":"secret"}',
+                )
+            )
 
             # Get
             record = loop.run_until_complete(db_manager.get_request_token("req_tok_1"))
@@ -154,17 +159,17 @@ class TestDatabaseManager:
             loop.run_until_complete(db_manager.start())
 
             # Save
-            loop.run_until_complete(db_manager.save_user_token(
-                source_platform="feishu",
-                source_user_id="user1",
-                sink_platform="fanfou",
-                token_data='{"oauth_token":"tok","oauth_token_secret":"sec"}',
-            ))
+            loop.run_until_complete(
+                db_manager.save_user_token(
+                    source_platform="feishu",
+                    source_user_id="user1",
+                    sink_platform="fanfou",
+                    token_data='{"oauth_token":"tok","oauth_token_secret":"sec"}',
+                )
+            )
 
             # Get
-            token_data = loop.run_until_complete(
-                db_manager.get_any_token_for_sink("fanfou")
-            )
+            token_data = loop.run_until_complete(db_manager.get_any_token_for_sink("fanfou"))
             assert token_data is not None
             assert "tok" in token_data
 
@@ -175,9 +180,7 @@ class TestDatabaseManager:
             assert deleted is True
 
             # Get again
-            token_data = loop.run_until_complete(
-                db_manager.get_any_token_for_sink("fanfou")
-            )
+            token_data = loop.run_until_complete(db_manager.get_any_token_for_sink("fanfou"))
             assert token_data is None
 
             loop.run_until_complete(db_manager.stop())

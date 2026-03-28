@@ -2,6 +2,7 @@
 Feishu Webhook Handler & OAuth Callback
 飞书 Webhook + 通用 OAuth 回调路由
 """
+
 import json
 
 from fastapi import APIRouter, Request, Response
@@ -61,6 +62,7 @@ async def oauth_callback(request: Request):
         reply_service = ReplyService.get_instance()
         if reply_service:
             from app.schemas.event import MessageSource
+
             reply_service.send(MessageSource.FEISHU, user_id, result)
 
     return {"message": result}

@@ -2,6 +2,7 @@
 FastAPI Main Application Entry Point
 FastAPI 主程序入口 - 整合所有组件
 """
+
 import asyncio
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
@@ -19,7 +20,7 @@ logger.add(
     rotation="1 day",
     retention="7 days",
     level=settings.log_level,
-    format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}"
+    format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
 )
 
 
@@ -83,11 +84,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         if settings.telegram_enabled:
             logger.info("Initializing Telegram client...")
             from app.services.platforms.telegram.client import TelegramClient
+
             telegram_client = TelegramClient.create_instance()
             await telegram_client.start()
 
             # 注册 Telegram 回复方法到 ReplyService
             from app.schemas.event import MessageSource
+
             reply_service.register(
                 MessageSource.TELEGRAM,
                 reply_handler=telegram_client.reply_to_message,
@@ -100,8 +103,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
 
                 event_bus.register(telegram_client.handle_message)
                 logger.info(
-                    "Telegram channel sink registered, "
-                    f"channel_id={settings.telegram_channel_id}"
+                    f"Telegram channel sink registered, channel_id={settings.telegram_channel_id}"
                 )
 
         # Step 5: Feishu Source
@@ -123,6 +125,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
 
         # 打印状态
         from app.core.bus import bus
+
         handler_count = bus.get_handler_count()
         logger.info(f"Event bus initialized with {handler_count} handlers")
 
@@ -192,9 +195,11 @@ app = FastAPI(
 
 # ===== 路由注册 =====
 
+
 @app.get("/")
 async def root():
     from app.core.bus import bus
+
     return {
         "status": "running",
         "app": settings.app_name,
@@ -217,6 +222,7 @@ async def health():
 @app.get("/stats")
 async def stats():
     from app.core.bus import bus
+
     message_count = 0
     db_manager = DatabaseManager.get_instance()
     if db_manager:
@@ -245,6 +251,7 @@ app.include_router(feishu_router)
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(
         "app.main:app",
         host=settings.host,

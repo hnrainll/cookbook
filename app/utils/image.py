@@ -23,17 +23,17 @@ def compress_image_advanced(image_bytes, target_size_mb=2, max_dimension=None):
     image = Image.open(io.BytesIO(image_bytes))
 
     # 处理透明度
-    if image.mode in ('RGBA', 'LA', 'P'):
-        background = Image.new('RGB', image.size, (255, 255, 255))
-        if image.mode == 'P':
-            image = image.convert('RGBA')
-        if image.mode in ('RGBA', 'LA'):
+    if image.mode in ("RGBA", "LA", "P"):
+        background = Image.new("RGB", image.size, (255, 255, 255))
+        if image.mode == "P":
+            image = image.convert("RGBA")
+        if image.mode in ("RGBA", "LA"):
             background.paste(image, mask=image.split()[-1])
         else:
             background.paste(image)
         image = background
-    elif image.mode != 'RGB':
-        image = image.convert('RGB')
+    elif image.mode != "RGB":
+        image = image.convert("RGB")
 
     # 如果指定了最大尺寸限制
     if max_dimension:
@@ -64,7 +64,7 @@ def compress_image_advanced(image_bytes, target_size_mb=2, max_dimension=None):
     # 检查是否需要缩放
     if _get_compressed_size(image, best_quality) <= target_size_bytes:
         output = io.BytesIO()
-        image.save(output, format='JPEG', quality=best_quality, optimize=True)
+        image.save(output, format="JPEG", quality=best_quality, optimize=True)
         return output.getvalue()
 
     # 需要缩放，使用二分查找找到最佳尺寸
@@ -105,11 +105,11 @@ def compress_image_advanced(image_bytes, target_size_mb=2, max_dimension=None):
     final_image = image.resize((final_width, final_height), Image.Resampling.LANCZOS)
 
     output = io.BytesIO()
-    final_image.save(output, format='JPEG', quality=best_quality, optimize=True)
+    final_image.save(output, format="JPEG", quality=best_quality, optimize=True)
     return output.getvalue()
 
 
 def _get_compressed_size(img, quality):
     output = io.BytesIO()
-    img.save(output, format='JPEG', quality=quality, optimize=True)
+    img.save(output, format="JPEG", quality=quality, optimize=True)
     return len(output.getvalue())

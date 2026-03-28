@@ -1,4 +1,5 @@
 """Tests for AuthService"""
+
 import asyncio
 
 from app.core.auth import AuthService
@@ -26,7 +27,6 @@ class MockAuthHandler:
 
 
 class TestAuthService:
-
     def setup_method(self):
         AuthService.reset_instance()
 

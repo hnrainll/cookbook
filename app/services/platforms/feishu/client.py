@@ -8,6 +8,7 @@ Feishu Platform Adapter with Thread Isolation
 3. 使用 lark.ws.Client + EventDispatcherHandler（与旧版一致）
 4. 线程安全地将消息发布到主事件循环的消息总线
 """
+
 import asyncio
 import json
 import sys
@@ -102,10 +103,7 @@ class FeishuManager:
             ReplyMessageRequest.builder()
             .message_id(message_id)
             .request_body(
-                ReplyMessageRequestBody.builder()
-                .content(content)
-                .msg_type("text")
-                .build()
+                ReplyMessageRequestBody.builder().content(content).msg_type("text").build()
             )
             .build()
         )
@@ -298,9 +296,7 @@ class FeishuManager:
     def _publish_to_bus(self, message: UnifiedMessage) -> None:
         """线程安全地将消息发布到主事件循环的 EventBus"""
         try:
-            future = asyncio.run_coroutine_threadsafe(
-                bus.publish(message), self.main_loop
-            )
+            future = asyncio.run_coroutine_threadsafe(bus.publish(message), self.main_loop)
             future.result(timeout=10.0)
         except Exception as e:
             logger.error(f"发布消息到 EventBus 失败: {e}", exc_info=True)
@@ -321,10 +317,12 @@ class FeishuManager:
                     logger.info(f"已修复 {feishu_ws_module_name} 中的全局 loop 变量")
 
             # 初始化 Lark Client（用于 OpenAPI 调用）
-            self.client = lark.Client.builder() \
-                .app_id(settings.feishu_app_id) \
-                .app_secret(settings.feishu_app_secret) \
+            self.client = (
+                lark.Client.builder()
+                .app_id(settings.feishu_app_id)
+                .app_secret(settings.feishu_app_secret)
                 .build()
+            )
 
             # 注册事件处理器
             handler = (
@@ -354,9 +352,7 @@ class FeishuManager:
         if self.thread and self.thread.is_alive():
             logger.warning("Feishu thread already running")
             return
-        self.thread = threading.Thread(
-            target=self._run_in_thread, daemon=True, name="FeishuThread"
-        )
+        self.thread = threading.Thread(target=self._run_in_thread, daemon=True, name="FeishuThread")
         self.thread.start()
         logger.info("Feishu thread started")
 

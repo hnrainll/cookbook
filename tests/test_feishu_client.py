@@ -1,9 +1,9 @@
 """Tests for Feishu client components"""
+
 from app.services.platforms.feishu.client import OrderedDictDeduplicator
 
 
 class TestOrderedDictDeduplicator:
-
     def test_new_message(self):
         dedup = OrderedDictDeduplicator(max_size=10)
         assert dedup.add("msg1") is True

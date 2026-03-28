@@ -2,6 +2,7 @@
 Mastodon Platform Sink
 Mastodon 平台消费者 - 接收统一消息并发送到 Mastodon
 """
+
 import json
 from typing import ClassVar, Optional
 

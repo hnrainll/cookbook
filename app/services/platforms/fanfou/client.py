@@ -8,6 +8,7 @@ Fanfou 平台消费者 - 接收统一消息并发送到 Fanfou
 3. 处理 OAuth 1.0a 认证（通过 FanfouAuthHandler）
 4. 通过 ReplyService 回复用户处理结果
 """
+
 import json
 from typing import ClassVar, Optional
 
@@ -42,6 +43,7 @@ class FanfouAuthHandler:
 
         # 保存 request token 到数据库
         from app.services.storage.db import DatabaseManager
+
         db = DatabaseManager.get_instance()
         if db:
             await db.save_request_token(
@@ -66,6 +68,7 @@ class FanfouAuthHandler:
             return "授权失败：缺少 oauth_token", None
 
         from app.services.storage.db import DatabaseManager
+
         db = DatabaseManager.get_instance()
         if not db:
             return "授权失败：数据库未初始化", None
@@ -101,6 +104,7 @@ class FanfouAuthHandler:
     async def remove_auth(self, user_id: str) -> bool:
         """移除用户的 Fanfou 授权"""
         from app.services.storage.db import DatabaseManager
+
         db = DatabaseManager.get_instance()
         if not db:
             return False
@@ -137,6 +141,7 @@ class FanfouClient:
     async def _get_fanfou(self) -> Optional[Fanfou]:
         """获取已授权的 Fanfou 实例"""
         from app.services.storage.db import DatabaseManager
+
         db = DatabaseManager.get_instance()
         if not db:
             return None
@@ -234,6 +239,7 @@ class FanfouClient:
     async def _handle_text(self, message: UnifiedMessage) -> None:
         """处理文本消息"""
         from app.core.reply import ReplyService
+
         reply_service = ReplyService.get_instance()
 
         ret = await self.post_text(message.content)
@@ -242,15 +248,14 @@ class FanfouClient:
 
         if reply_service and ret:
             status_id = ret.get("id", "")
-            reply_service.reply(
-                message, f"消息发送成功\n\nhttps://fanfou.com/statuses/{status_id}"
-            )
+            reply_service.reply(message, f"消息发送成功\n\nhttps://fanfou.com/statuses/{status_id}")
         elif reply_service:
             reply_service.reply(message, "消息发送失败")
 
     async def _handle_image(self, message: UnifiedMessage) -> None:
         """处理图片消息"""
         from app.core.reply import ReplyService
+
         reply_service = ReplyService.get_instance()
 
         if not message.image_data:
@@ -265,15 +270,14 @@ class FanfouClient:
 
         if reply_service and ret:
             status_id = ret.get("id", "")
-            reply_service.reply(
-                message, f"图片发送成功\n\nhttps://fanfou.com/statuses/{status_id}"
-            )
+            reply_service.reply(message, f"图片发送成功\n\nhttps://fanfou.com/statuses/{status_id}")
         elif reply_service:
             reply_service.reply(message, "图片发送失败")
 
     async def _save_sink_result(self, message: UnifiedMessage, ret: Optional[dict]) -> None:
         """保存发送结果到数据库"""
         from app.services.storage.db import DatabaseManager
+
         db = DatabaseManager.get_instance()
         if not db:
             return

@@ -6,6 +6,7 @@ AuthService - 多平台 OAuth 授权管理服务
 - /logout <platform> → 移除授权
 - /auth?platform=xxx&oauth_token=xxx → OAuth 回调
 """
+
 from typing import Optional, Protocol, runtime_checkable
 
 from loguru import logger

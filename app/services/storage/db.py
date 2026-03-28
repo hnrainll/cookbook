@@ -7,6 +7,7 @@ SQLite 存储消费者 + 认证 Token 管理
 2. 管理 sink_results 表（各 Sink 的发送结果）
 3. 管理 auth_tokens / auth_requests 表（OAuth Token 存储）
 """
+
 import json
 from pathlib import Path
 from typing import ClassVar, Optional
@@ -116,18 +117,10 @@ class DatabaseManager:
         """)
 
         # 索引
-        await self.conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_event_id ON messages(event_id)"
-        )
-        await self.conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_source ON messages(source)"
-        )
-        await self.conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_sender_id ON messages(sender_id)"
-        )
-        await self.conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_timestamp ON messages(timestamp)"
-        )
+        await self.conn.execute("CREATE INDEX IF NOT EXISTS idx_event_id ON messages(event_id)")
+        await self.conn.execute("CREATE INDEX IF NOT EXISTS idx_source ON messages(source)")
+        await self.conn.execute("CREATE INDEX IF NOT EXISTS idx_sender_id ON messages(sender_id)")
+        await self.conn.execute("CREATE INDEX IF NOT EXISTS idx_timestamp ON messages(timestamp)")
         await self.conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_sink_results_event ON sink_results(event_id)"
         )
@@ -143,23 +136,26 @@ class DatabaseManager:
             return False
         try:
             raw_data_json = json.dumps(message.raw_data)
-            await self.conn.execute("""
+            await self.conn.execute(
+                """
                 INSERT INTO messages (
                     event_id, source, content, message_type, sender_id,
                     sender_name, chat_id, image_path, raw_data, timestamp
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                str(message.event_id),
-                message.source,
-                message.content,
-                message.message_type,
-                message.sender_id,
-                message.sender_name,
-                message.chat_id,
-                message.image_path,
-                raw_data_json,
-                message.timestamp.isoformat(),
-            ))
+            """,
+                (
+                    str(message.event_id),
+                    message.source,
+                    message.content,
+                    message.message_type,
+                    message.sender_id,
+                    message.sender_name,
+                    message.chat_id,
+                    message.image_path,
+                    raw_data_json,
+                    message.timestamp.isoformat(),
+                ),
+            )
             await self.conn.commit()
             logger.debug(f"Message {message.event_id} saved to database")
             return True
@@ -188,15 +184,22 @@ class DatabaseManager:
     async def get_recent_messages(self, limit: int = 10) -> list:
         if not self.conn:
             return []
-        cursor = await self.conn.execute("""
+        cursor = await self.conn.execute(
+            """
             SELECT event_id, source, content, message_type, sender_name, timestamp
             FROM messages ORDER BY timestamp DESC LIMIT ?
-        """, (limit,))
+        """,
+            (limit,),
+        )
         rows = await cursor.fetchall()
         return [
             {
-                "event_id": row[0], "source": row[1], "content": row[2],
-                "message_type": row[3], "sender_name": row[4], "timestamp": row[5],
+                "event_id": row[0],
+                "source": row[1],
+                "content": row[2],
+                "message_type": row[3],
+                "sender_name": row[4],
+                "timestamp": row[5],
             }
             for row in rows
         ]
@@ -216,13 +219,23 @@ class DatabaseManager:
         if not self.conn:
             return False
         try:
-            await self.conn.execute("""
+            await self.conn.execute(
+                """
                 INSERT OR REPLACE INTO sink_results (
                     event_id, sink_platform, status_id, status_url,
                     response_data, success, error_message
                 ) VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (event_id, sink_platform, status_id, status_url,
-                  response_data, success, error_message))
+            """,
+                (
+                    event_id,
+                    sink_platform,
+                    status_id,
+                    status_url,
+                    response_data,
+                    success,
+                    error_message,
+                ),
+            )
             await self.conn.commit()
             return True
         except Exception as e:
@@ -242,11 +255,14 @@ class DatabaseManager:
         if not self.conn:
             return False
         try:
-            await self.conn.execute("""
+            await self.conn.execute(
+                """
                 INSERT OR REPLACE INTO auth_requests (
                     oauth_token, source_platform, source_user_id, sink_platform, token_data
                 ) VALUES (?, ?, ?, ?, ?)
-            """, (oauth_token, source_platform, source_user_id, sink_platform, token_data))
+            """,
+                (oauth_token, source_platform, source_user_id, sink_platform, token_data),
+            )
             await self.conn.commit()
             return True
         except Exception as e:
@@ -273,9 +289,7 @@ class DatabaseManager:
     async def delete_request_token(self, oauth_token: str) -> bool:
         if not self.conn:
             return False
-        await self.conn.execute(
-            "DELETE FROM auth_requests WHERE oauth_token = ?", (oauth_token,)
-        )
+        await self.conn.execute("DELETE FROM auth_requests WHERE oauth_token = ?", (oauth_token,))
         await self.conn.commit()
         return True
 
@@ -291,28 +305,33 @@ class DatabaseManager:
         if not self.conn:
             return False
         try:
-            await self.conn.execute("""
+            await self.conn.execute(
+                """
                 INSERT OR REPLACE INTO auth_tokens (
                     source_platform, source_user_id, sink_platform, token_data, updated_at
                 ) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-            """, (source_platform, source_user_id, sink_platform, token_data))
+            """,
+                (source_platform, source_user_id, sink_platform, token_data),
+            )
             await self.conn.commit()
             return True
         except Exception as e:
             logger.error(f"Failed to save user token: {e}")
             return False
 
-
     async def get_any_token_for_sink(self, sink_platform: str) -> Optional[str]:
         """获取任意一个可用的 sink token（不限来源平台）"""
         if not self.conn:
             return None
-        cursor = await self.conn.execute("""
+        cursor = await self.conn.execute(
+            """
             SELECT token_data FROM auth_tokens
             WHERE sink_platform = ?
             ORDER BY updated_at DESC
             LIMIT 1
-        """, (sink_platform,))
+        """,
+            (sink_platform,),
+        )
         row = await cursor.fetchone()
         return row[0] if row else None
 
@@ -321,10 +340,13 @@ class DatabaseManager:
     ) -> bool:
         if not self.conn:
             return False
-        cursor = await self.conn.execute("""
+        cursor = await self.conn.execute(
+            """
             DELETE FROM auth_tokens
             WHERE source_platform = ? AND source_user_id = ? AND sink_platform = ?
-        """, (source_platform, source_user_id, sink_platform))
+        """,
+            (source_platform, source_user_id, sink_platform),
+        )
         await self.conn.commit()
         return cursor.rowcount > 0
 

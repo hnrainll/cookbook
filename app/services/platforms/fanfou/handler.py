@@ -7,6 +7,7 @@ Feishu Webhook Handler for FastAPI
 2. 验证请求签名（安全性）
 3. 将事件转发给飞书管理器处理
 """
+
 from fastapi import APIRouter, Request, Response
 from loguru import logger
 
@@ -17,12 +18,12 @@ router = APIRouter()
 async def fanfou_auth(request: Request) -> Response:
     """
     饭否授权
-    
+
     饭否授权回调端点
-    
+
     Args:
         request: FastAPI 请求对象
-    
+
     Returns:
         响应对象
     """
@@ -31,14 +32,15 @@ async def fanfou_auth(request: Request) -> Response:
         body = await request.body()
 
         logger.debug(f"Received Feishu webhook: {len(body)} bytes")
-        
+
         # TODO: 验证签名（生产环境必须）
         # if not verify_signature(body, headers):
         #     logger.warning("Invalid Feishu webhook signature")
         #     return Response(status_code=401)
-        
+
         # 解析 JSON
         import json
+
         data = json.loads(body)
 
         # 处理 URL 验证挑战

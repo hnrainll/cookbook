@@ -1,4 +1,5 @@
 """Integration tests - full message flow through EventBus"""
+
 import asyncio
 import os
 import tempfile
@@ -50,7 +51,6 @@ def db_manager():
 
 
 class TestMessageFlow:
-
     def test_bus_distributes_to_db_sink(self, db_manager):
         """Message published to bus gets saved by DB handler."""
         loop = asyncio.new_event_loop()

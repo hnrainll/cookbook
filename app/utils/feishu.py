@@ -1,7 +1,7 @@
 import json
 
 
-def extract_img_and_first_text_group(data, separator=''):
+def extract_img_and_first_text_group(data, separator=""):
     """
     从JSON数据中提取第一个img标签的image_key值和第一个包含text的列表中的所有text值
 
@@ -18,7 +18,7 @@ def extract_img_and_first_text_group(data, separator=''):
     if isinstance(data, str):
         data = json.loads(data)
 
-    content = data.get('content', [])
+    content = data.get("content", [])
 
     first_image_key = None
     first_text_group = []
@@ -30,15 +30,15 @@ def extract_img_and_first_text_group(data, separator=''):
 
         # 一次遍历同时处理img和text
         for item in item_list:
-            tag = item.get('tag')
+            tag = item.get("tag")
 
             # 查找第一个img
-            if tag == 'img' and first_image_key is None:
-                first_image_key = item.get('image_key')
+            if tag == "img" and first_image_key is None:
+                first_image_key = item.get("image_key")
 
             # 收集当前列表中的text（如果还没找到第一个text组）
-            elif tag == 'text' and not first_text_group_found:
-                text_value = item.get('text')
+            elif tag == "text" and not first_text_group_found:
+                text_value = item.get("text")
                 if text_value:
                     current_list_texts.append(text_value)
 
@@ -52,6 +52,6 @@ def extract_img_and_first_text_group(data, separator=''):
             break
 
     # 合并第一个text组的所有text值
-    combined_text = separator.join(first_text_group) if first_text_group else ''
+    combined_text = separator.join(first_text_group) if first_text_group else ""
 
     return first_image_key, combined_text

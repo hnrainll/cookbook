@@ -1,4 +1,5 @@
 """Tests for OAuth callback route"""
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -29,7 +30,6 @@ class MockHandler:
 
 
 class TestOAuthCallback:
-
     def test_missing_oauth_token(self):
         """Missing oauth_token returns error."""
         from fastapi import FastAPI
@@ -79,6 +79,7 @@ class TestOAuthCallback:
 
         sent = []
         from app.schemas.event import MessageSource
+
         reply_svc.register(
             MessageSource.FEISHU,
             reply_handler=lambda m, t: None,

@@ -1,4 +1,5 @@
 """Tests for Fanfou client components"""
+
 import asyncio
 import json
 import os
@@ -17,6 +18,7 @@ from app.services.platforms.fanfou.client import FanfouClient
 def db_manager():
     """Create a fresh DatabaseManager for each test."""
     from app.services.storage.db import DatabaseManager
+
     DatabaseManager.reset_instance()
 
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
@@ -48,7 +50,6 @@ def reset_singletons():
 
 
 class TestFanfouClient:
-
     def test_post_text_no_token(self):
         """No token returns None."""
         loop = asyncio.new_event_loop()
@@ -72,12 +73,14 @@ class TestFanfouClient:
     def test_post_text_with_mock_sdk(self, db_manager):
         """post_text calls SDK correctly."""
         mgr, loop = db_manager
-        loop.run_until_complete(mgr.save_user_token(
-            source_platform="feishu",
-            source_user_id="user1",
-            sink_platform="fanfou",
-            token_data=json.dumps({"oauth_token": "tok", "oauth_token_secret": "sec"}),
-        ))
+        loop.run_until_complete(
+            mgr.save_user_token(
+                source_platform="feishu",
+                source_user_id="user1",
+                sink_platform="fanfou",
+                token_data=json.dumps({"oauth_token": "tok", "oauth_token_secret": "sec"}),
+            )
+        )
 
         client = FanfouClient()
 
@@ -92,12 +95,14 @@ class TestFanfouClient:
     def test_post_photo_with_mock_sdk(self, db_manager):
         """post_photo calls SDK correctly."""
         mgr, loop = db_manager
-        loop.run_until_complete(mgr.save_user_token(
-            source_platform="feishu",
-            source_user_id="user1",
-            sink_platform="fanfou",
-            token_data=json.dumps({"oauth_token": "tok", "oauth_token_secret": "sec"}),
-        ))
+        loop.run_until_complete(
+            mgr.save_user_token(
+                source_platform="feishu",
+                source_user_id="user1",
+                sink_platform="fanfou",
+                token_data=json.dumps({"oauth_token": "tok", "oauth_token_secret": "sec"}),
+            )
+        )
 
         client = FanfouClient()
 
@@ -105,15 +110,12 @@ class TestFanfouClient:
             mock_ff = MockFanfou.return_value
             mock_ff.post_photo = AsyncMock(return_value=({"id": "67890"}, MagicMock()))
 
-            result = loop.run_until_complete(
-                client.post_photo(b"image_data", "caption")
-            )
+            result = loop.run_until_complete(client.post_photo(b"image_data", "caption"))
             assert result is not None
             assert result["id"] == "67890"
 
 
 class TestFanfouHandleMessage:
-
     def test_handle_command_login_list(self):
         """Handle /login without platform lists available platforms."""
         loop = asyncio.new_event_loop()
@@ -128,6 +130,7 @@ class TestFanfouHandleMessage:
             )
 
             from app.core.bus import bus
+
             bus.clear_handlers()
 
             client = FanfouClient()
@@ -159,6 +162,7 @@ class TestFanfouHandleMessage:
             )
 
             from app.core.bus import bus
+
             bus.clear_handlers()
 
             client = FanfouClient()
@@ -190,6 +194,7 @@ class TestFanfouHandleMessage:
             )
 
             from app.core.bus import bus
+
             bus.clear_handlers()
 
             client = FanfouClient()

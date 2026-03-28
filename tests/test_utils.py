@@ -1,4 +1,5 @@
 """Tests for app/utils/ modules"""
+
 import io
 
 from PIL import Image
@@ -8,7 +9,6 @@ from app.utils.image import compress_image_advanced
 
 
 class TestCompressImageAdvanced:
-
     def _make_image(self, width=100, height=100, color="red", fmt="JPEG") -> bytes:
         img = Image.new("RGB", (width, height), color)
         buf = io.BytesIO()
@@ -49,7 +49,6 @@ class TestCompressImageAdvanced:
 
 
 class TestExtractImgAndFirstTextGroup:
-
     def test_basic_text_and_image(self):
         data = {
             "content": [
@@ -94,11 +93,14 @@ class TestExtractImgAndFirstTextGroup:
 
     def test_json_string_input(self):
         import json
-        data = json.dumps({
-            "content": [
-                [{"tag": "text", "text": "from json"}],
-            ]
-        })
+
+        data = json.dumps(
+            {
+                "content": [
+                    [{"tag": "text", "text": "from json"}],
+                ]
+            }
+        )
         image_key, text = extract_img_and_first_text_group(data)
         assert text == "from json"
 
