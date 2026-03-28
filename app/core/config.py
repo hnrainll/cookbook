@@ -39,7 +39,10 @@ class Settings(BaseSettings):
     fanfou_enabled: bool = Field(default=False, description="是否启用 Fanfou 集成")
     fanfou_consumer_key: str = Field(default="", description="Fanfou Consumer Key")
     fanfou_consumer_secret: str = Field(default="", description="Fanfou Consumer Secret")
-    fanfou_oauth_callback: str = Field(default="http://127.0.0.1:8009/auth", description="Fanfou OAuth Callback URL")
+    fanfou_oauth_callback: str = Field(
+        default="http://127.0.0.1:8009/auth",
+        description="Fanfou OAuth Callback URL",
+    )
     
     # ===== 数据库配置 =====
     database_enabled: bool = Field(default=True, description="是否启用数据库存储")

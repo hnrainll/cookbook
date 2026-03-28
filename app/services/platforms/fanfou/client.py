@@ -16,7 +16,6 @@ from loguru import logger
 from app.core.bus import bus
 from app.core.config import settings
 from app.schemas.event import UnifiedMessage
-
 from app.services.platforms.fanfou.sdk import Fanfou
 
 

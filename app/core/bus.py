@@ -9,13 +9,18 @@ Async Event Bus - Core Message Routing System
 """
 import asyncio
 from typing import Any, Awaitable, Callable, List
+
 from loguru import logger
 
 from app.schemas.event import UnifiedMessage
 
-
 # 定义消息处理器类型
 MessageHandler = Callable[[UnifiedMessage], Awaitable[None]]
+
+
+def _handler_name(handler: MessageHandler) -> str:
+    """获取 handler 的可读名称，兼容任意可调用对象。"""
+    return getattr(handler, "__name__", handler.__class__.__name__)
 
 
 class EventBus:
@@ -66,7 +71,7 @@ class EventBus:
         """
         if handler not in self._handlers:
             self._handlers.append(handler)
-            logger.info(f"Registered event handler: {handler.__name__}")
+            logger.info(f"Registered event handler: {_handler_name(handler)}")
     
     async def publish(self, message: UnifiedMessage) -> None:
         """
@@ -121,13 +126,14 @@ class EventBus:
             处理器的返回值，或抛出异常
         """
         try:
-            logger.debug(f"Handler {handler.__name__} processing message {message.event_id}")
+            handler_name = _handler_name(handler)
+            logger.debug(f"Handler {handler_name} processing message {message.event_id}")
             result = await handler(message)
-            logger.debug(f"Handler {handler.__name__} completed for message {message.event_id}")
+            logger.debug(f"Handler {handler_name} completed for message {message.event_id}")
             return result
         except Exception as e:
             logger.error(
-                f"Handler {handler.__name__} failed for message {message.event_id}: "
+                f"Handler {handler_name} failed for message {message.event_id}: "
                 f"{type(e).__name__}: {e}",
                 exc_info=True
             )

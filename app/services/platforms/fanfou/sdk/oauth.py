@@ -44,7 +44,11 @@ def _get_base_string(request, oauth_data):
     oauth_data.update(params)
     oauth_data.update(request['data'])
 
-    base_elements = (request['method'].upper(), _normalized_url(request['url']), _get_query(oauth_data))
+    base_elements = (
+        request['method'].upper(),
+        _normalized_url(request['url']),
+        _get_query(oauth_data),
+    )
     base_string = '&'.join(_escape(s) for s in base_elements)
     return base_string
 
@@ -89,7 +93,11 @@ class OAuth(object):
         if 'data' not in request:
             request['data'] = {}
 
-        oauth_data['oauth_signature'] = self._get_signature(request, oauth_data, token.get('secret', ''))
+        oauth_data['oauth_signature'] = self._get_signature(
+            request,
+            oauth_data,
+            token.get('secret', ''),
+        )
         return oauth_data
 
     def _get_authorization(self, oauth_data) -> str:

@@ -10,7 +10,6 @@ from loguru import logger
 
 from app.schemas.event import MessageSource, UnifiedMessage
 
-
 # 回复函数签名: (message: UnifiedMessage, text: str) -> None
 ReplyHandler = Callable[[UnifiedMessage, str], None]
 

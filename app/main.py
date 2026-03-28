@@ -10,8 +10,8 @@ from fastapi import FastAPI
 from loguru import logger
 
 from app.core.config import settings
+from app.services.platforms.feishu.handler import router as feishu_router
 from app.services.storage.db import DatabaseManager
-
 
 # 配置日志
 logger.add(
@@ -62,7 +62,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         # Step 3: Fanfou Sink
         if settings.fanfou_enabled:
             logger.info("Initializing Fanfou client...")
-            from app.services.platforms.fanfou.client import FanfouClient, FanfouAuthHandler
+            from app.services.platforms.fanfou.client import FanfouAuthHandler, FanfouClient
             fanfou_client = FanfouClient.create_instance()
             await fanfou_client.start()
 
@@ -88,14 +88,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
             # 注册 Telegram Sink（转发消息到频道）
             if settings.telegram_channel_id:
                 from app.core.bus import bus as event_bus
+
                 event_bus.register(telegram_client.handle_message)
-                logger.info(f"Telegram channel sink registered, channel_id={settings.telegram_channel_id}")
+                logger.info(
+                    "Telegram channel sink registered, "
+                    f"channel_id={settings.telegram_channel_id}"
+                )
 
         # Step 5: Feishu Source
         if settings.feishu_enabled:
             logger.info("Initializing Feishu client...")
-            from app.services.platforms.feishu.client import FeishuManager
             from app.schemas.event import MessageSource
+            from app.services.platforms.feishu.client import FeishuManager
 
             main_loop = asyncio.get_event_loop()
             feishu_manager = FeishuManager.create_instance(main_loop)
@@ -217,8 +221,6 @@ async def get_messages(limit: int = 10):
         return {"error": str(e)}
 
 
-# 注册 Webhook + OAuth 路由
-from app.services.platforms.feishu.handler import router as feishu_router
 app.include_router(feishu_router)
 
 

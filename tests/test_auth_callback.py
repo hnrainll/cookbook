@@ -32,8 +32,9 @@ class TestOAuthCallback:
 
     def test_missing_oauth_token(self):
         """Missing oauth_token returns error."""
-        from app.services.platforms.feishu.handler import router
         from fastapi import FastAPI
+
+        from app.services.platforms.feishu.handler import router
 
         app = FastAPI()
         app.include_router(router)
@@ -49,8 +50,9 @@ class TestOAuthCallback:
 
     def test_auth_service_not_initialized(self):
         """AuthService not initialized returns error."""
-        from app.services.platforms.feishu.handler import router
         from fastapi import FastAPI
+
+        from app.services.platforms.feishu.handler import router
 
         app = FastAPI()
         app.include_router(router)
@@ -63,8 +65,9 @@ class TestOAuthCallback:
 
     def test_callback_with_platform(self):
         """OAuth callback routes to correct platform handler."""
-        from app.services.platforms.feishu.handler import router
         from fastapi import FastAPI
+
+        from app.services.platforms.feishu.handler import router
 
         app = FastAPI()
         app.include_router(router)
@@ -90,8 +93,9 @@ class TestOAuthCallback:
 
     def test_callback_default_platform(self):
         """Default platform is fanfou when not specified."""
-        from app.services.platforms.feishu.handler import router
         from fastapi import FastAPI
+
+        from app.services.platforms.feishu.handler import router
 
         app = FastAPI()
         app.include_router(router)

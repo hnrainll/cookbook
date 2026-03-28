@@ -7,9 +7,6 @@ import json
 from fastapi import APIRouter, Request, Response
 from loguru import logger
 
-from app.core.config import settings
-
-
 router = APIRouter(tags=["webhook"])
 
 

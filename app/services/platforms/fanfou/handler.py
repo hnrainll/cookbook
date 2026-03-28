@@ -10,9 +10,6 @@ Feishu Webhook Handler for FastAPI
 from fastapi import APIRouter, Request, Response
 from loguru import logger
 
-from app.core.config import settings
-
-
 router = APIRouter()
 
 
@@ -32,8 +29,7 @@ async def fanfou_auth(request: Request) -> Response:
     try:
         # 获取原始请求体
         body = await request.body()
-        headers = dict(request.headers)
-        
+
         logger.debug(f"Received Feishu webhook: {len(body)} bytes")
         
         # TODO: 验证签名（生产环境必须）
@@ -44,23 +40,23 @@ async def fanfou_auth(request: Request) -> Response:
         # 解析 JSON
         import json
         data = json.loads(body)
-        
+
         # 处理 URL 验证挑战
         # 飞书配置 Webhook 时会发送验证请求
         if "challenge" in data:
             logger.info("Received Feishu URL verification challenge")
             return Response(
                 content=json.dumps({"challenge": data["challenge"]}),
-                media_type="application/json"
+                media_type="application/json",
             )
-        
+
         # 正常事件处理
         # 注意：这里只是接收，真正的处理在 FeishuManager 的独立线程中
         logger.info(f"Received Feishu event: {data.get('type', 'unknown')}")
-        
+
         # 快速返回响应（飞书要求 3 秒内响应）
         return Response(content=json.dumps({"code": 0}), media_type="application/json")
-        
+
     except Exception as e:
         logger.error(f"Error handling Feishu webhook: {e}", exc_info=True)
         return Response(status_code=500)

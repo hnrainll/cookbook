@@ -3,8 +3,8 @@ import io
 
 from PIL import Image
 
-from app.utils.image import compress_image_advanced
 from app.utils.feishu import extract_img_and_first_text_group
+from app.utils.image import compress_image_advanced
 
 
 class TestCompressImageAdvanced:

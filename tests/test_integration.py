@@ -1,6 +1,5 @@
 """Integration tests - full message flow through EventBus"""
 import asyncio
-import json
 import os
 import tempfile
 
@@ -112,7 +111,7 @@ class TestMessageFlow:
         """Command messages are handled by auth, not posted to fanfou."""
         loop = asyncio.new_event_loop()
         try:
-            auth_svc = AuthService.create_instance()
+            AuthService.create_instance()
             reply_svc = ReplyService.create_instance()
 
             replies = []

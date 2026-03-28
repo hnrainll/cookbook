@@ -54,7 +54,7 @@ class TestFanfouClient:
         loop = asyncio.new_event_loop()
         try:
             client = FanfouClient()
-            result = loop.run_until_complete(client.post_text("feishu", "user1", "hello"))
+            result = loop.run_until_complete(client.post_text("hello"))
             assert result is None
         finally:
             loop.close()
@@ -64,7 +64,7 @@ class TestFanfouClient:
         loop = asyncio.new_event_loop()
         try:
             client = FanfouClient()
-            result = loop.run_until_complete(client.post_photo("feishu", "user1", b"fake_image"))
+            result = loop.run_until_complete(client.post_photo(b"fake_image"))
             assert result is None
         finally:
             loop.close()
@@ -85,7 +85,7 @@ class TestFanfouClient:
             mock_ff = MockFanfou.return_value
             mock_ff.post_text = AsyncMock(return_value=({"id": "12345"}, MagicMock()))
 
-            result = loop.run_until_complete(client.post_text("feishu", "user1", "test post"))
+            result = loop.run_until_complete(client.post_text("test post"))
             assert result is not None
             assert result["id"] == "12345"
 
@@ -106,7 +106,7 @@ class TestFanfouClient:
             mock_ff.post_photo = AsyncMock(return_value=({"id": "67890"}, MagicMock()))
 
             result = loop.run_until_complete(
-                client.post_photo("feishu", "user1", b"image_data", "caption")
+                client.post_photo(b"image_data", "caption")
             )
             assert result is not None
             assert result["id"] == "67890"
@@ -118,7 +118,7 @@ class TestFanfouHandleMessage:
         """Handle /login without platform lists available platforms."""
         loop = asyncio.new_event_loop()
         try:
-            auth_svc = AuthService.create_instance()
+            AuthService.create_instance()
             reply_svc = ReplyService.create_instance()
 
             replies = []

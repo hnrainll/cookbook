@@ -1,4 +1,4 @@
-.PHONY: run dev test install
+.PHONY: run dev test install format lint type check
 
 # 启动服务
 run:
@@ -11,6 +11,21 @@ dev:
 # 运行测试
 test:
 	uv run pytest tests/ -v
+
+# 代码格式化
+format:
+	uv run ruff format .
+
+# 静态检查
+lint:
+	uv run ruff check .
+
+# 类型检查
+type:
+	uv run ty check
+
+# 本地完整检查
+check: lint type test
 
 # 安装依赖
 install:

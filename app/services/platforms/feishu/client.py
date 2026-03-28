@@ -10,12 +10,11 @@ Feishu Platform Adapter with Thread Isolation
 """
 import asyncio
 import json
-import os
 import sys
 import threading
 from collections import OrderedDict
 from pathlib import Path
-from typing import Any, ClassVar, Optional
+from typing import ClassVar, Optional
 
 import lark_oapi as lark
 from lark_oapi.api.im.v1 import (
@@ -24,18 +23,18 @@ from lark_oapi.api.im.v1 import (
     CreateMessageResponse,
     GetMessageResourceRequest,
     GetMessageResourceResponse,
+    P2ImMessageReceiveV1,
     ReplyMessageRequest,
     ReplyMessageRequestBody,
     ReplyMessageResponse,
-    P2ImMessageReceiveV1,
 )
 from loguru import logger
 
 from app.core.bus import bus
 from app.core.config import settings
 from app.schemas.event import MessageSource, UnifiedMessage
-from app.utils.image import compress_image_advanced
 from app.utils.feishu import extract_img_and_first_text_group
+from app.utils.image import compress_image_advanced
 
 
 class OrderedDictDeduplicator:
@@ -176,7 +175,10 @@ class FeishuManager:
             elif message_type == "post":
                 self._handle_post_message(data, open_id, message_id, chat_id)
             else:
-                self.send_message(open_id, f"当前饭薯不支持该消息类型. message_type: {message_type}")
+                self.send_message(
+                    open_id,
+                    f"当前饭薯不支持该消息类型. message_type: {message_type}",
+                )
 
         except Exception as e:
             logger.error(f"处理飞书消息异常: {e}", exc_info=True)

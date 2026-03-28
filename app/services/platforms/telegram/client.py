@@ -147,7 +147,11 @@ class TelegramClient:
         
         try:
             # 初始化 Bot 和 Dispatcher（支持代理）
-            session = AiohttpSession(proxy=settings.telegram_proxy) if settings.telegram_proxy else None
+            session = (
+                AiohttpSession(proxy=settings.telegram_proxy)
+                if settings.telegram_proxy
+                else None
+            )
             self.bot = Bot(token=settings.telegram_bot_token, session=session)
             self.dp = Dispatcher()
             
@@ -161,7 +165,11 @@ class TelegramClient:
             # 获取频道名称
             if self._channel_id:
                 try:
-                    channel_id = self._channel_id if self._channel_id.startswith("@") else int(self._channel_id)
+                    channel_id = (
+                        self._channel_id
+                        if self._channel_id.startswith("@")
+                        else int(self._channel_id)
+                    )
                     chat_info = await self.bot.get_chat(channel_id)
                     self._channel_name = chat_info.title or self._channel_id
                     logger.info(f"Telegram channel resolved: {self._channel_name}")
@@ -294,7 +302,11 @@ class TelegramClient:
     ) -> Optional[dict]:
         """发送消息到 Telegram 频道，返回结果 dict 或 None"""
         try:
-            channel_id = self._channel_id if self._channel_id.startswith("@") else int(self._channel_id)
+            channel_id = (
+                self._channel_id
+                if self._channel_id.startswith("@")
+                else int(self._channel_id)
+            )
 
             if image_data:
                 photo = BufferedInputFile(image_data, filename="image.jpg")

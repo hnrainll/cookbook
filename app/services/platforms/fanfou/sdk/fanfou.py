@@ -108,7 +108,10 @@ class Fanfou:
         if bool(params):
             url += '?%s' % parse.urlencode(params)
 
-        authorization = self.o.gen_authorization({'url': url, 'method': 'GET'}, self.access_oauth_token)
+        authorization = self.o.gen_authorization(
+            {"url": url, "method": "GET"},
+            self.access_oauth_token,
+        )
         async with httpx.AsyncClient() as client:
             r = await client.get(
                 url,

@@ -34,6 +34,18 @@ Sources                    Core                        Sinks
 # 安装依赖
 make install
 
+# 代码格式化
+make format
+
+# 静态检查
+make lint
+
+# 类型检查
+make type
+
+# 完整检查（lint + type + test）
+make check
+
 # 配置环境变量
 cp .env.example .env
 # 编辑 .env，填写各平台的认证信息
@@ -53,6 +65,11 @@ make dev
 ```bash
 make test
 ```
+
+## 代码质量
+
+- `ruff`：代码格式化和 lint
+- `ty`：类型检查
 
 ## 目录结构
 
