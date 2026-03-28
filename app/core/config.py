@@ -43,6 +43,18 @@ class Settings(BaseSettings):
         default="http://127.0.0.1:8009/auth",
         description="Fanfou OAuth Callback URL",
     )
+
+    # ===== Mastodon 配置 =====
+    mastodon_enabled: bool = Field(default=False, description="是否启用 Mastodon 集成")
+    mastodon_base_url: str = Field(
+        default="https://mastodon.social",
+        description="Mastodon 实例地址",
+    )
+    mastodon_access_token: str = Field(default="", description="Mastodon Access Token")
+    mastodon_visibility: str = Field(
+        default="public",
+        description="Mastodon 发帖可见性: public/unlisted/private/direct",
+    )
     
     # ===== 数据库配置 =====
     database_enabled: bool = Field(default=True, description="是否启用数据库存储")

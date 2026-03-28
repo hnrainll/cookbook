@@ -40,6 +40,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
 
     db_manager = None
     fanfou_client = None
+    mastodon_client = None
     telegram_client = None
     feishu_manager = None
     auth_service = None
@@ -63,12 +64,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         if settings.fanfou_enabled:
             logger.info("Initializing Fanfou client...")
             from app.services.platforms.fanfou.client import FanfouAuthHandler, FanfouClient
+
             fanfou_client = FanfouClient.create_instance()
             await fanfou_client.start()
 
             # 注册 FanfouAuthHandler 到 AuthService
             fanfou_auth_handler = FanfouAuthHandler()
             auth_service.register("fanfou", fanfou_auth_handler)
+
+        if settings.mastodon_enabled:
+            logger.info("Initializing Mastodon client...")
+            from app.services.platforms.mastodon.client import MastodonClient
+
+            mastodon_client = MastodonClient.create_instance()
+            await mastodon_client.start()
 
         # Step 4: Telegram Source + Sink
         if settings.telegram_enabled:
@@ -148,6 +157,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
             except Exception as e:
                 logger.error(f"Error stopping Fanfou: {e}")
 
+        if mastodon_client:
+            try:
+                await mastodon_client.stop()
+            except Exception as e:
+                logger.error(f"Error stopping Mastodon: {e}")
+
         if db_manager:
             try:
                 await db_manager.stop()
@@ -157,8 +172,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         # 重置单例以便测试
         from app.core.auth import AuthService
         from app.core.reply import ReplyService
+        from app.services.platforms.mastodon.client import MastodonClient
+
         AuthService.reset_instance()
         ReplyService.reset_instance()
+        MastodonClient.reset_instance()
 
         logger.info("Shutdown complete!")
 
@@ -185,6 +203,7 @@ async def root():
             "telegram": settings.telegram_enabled,
             "feishu": settings.feishu_enabled,
             "fanfou": settings.fanfou_enabled,
+            "mastodon": settings.mastodon_enabled,
             "database": settings.database_enabled,
         },
     }
