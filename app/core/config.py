@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     fanfou_consumer_key: str = Field(default="", description="Fanfou Consumer Key")
     fanfou_consumer_secret: str = Field(default="", description="Fanfou Consumer Secret")
     fanfou_oauth_callback: str = Field(
-        default="http://127.0.0.1:8009/auth",
+        default="http://127.0.0.1:8009/auth?platform=fanfou",
         description="Fanfou OAuth Callback URL",
     )
 
@@ -55,6 +55,23 @@ class Settings(BaseSettings):
     mastodon_visibility: str = Field(
         default="public",
         description="Mastodon 发帖可见性: public/unlisted/private/direct",
+    )
+
+    # ===== Threads 配置 =====
+    threads_enabled: bool = Field(default=False, description="是否启用 Threads 集成")
+    threads_app_id: str = Field(default="", description="Threads App ID")
+    threads_app_secret: str = Field(default="", description="Threads App Secret")
+    threads_redirect_uri: str = Field(
+        default="http://127.0.0.1:8009/auth?platform=threads",
+        description="Threads OAuth Redirect URI",
+    )
+    threads_base_url: str = Field(
+        default="https://graph.threads.net",
+        description="Threads Graph API Base URL",
+    )
+    threads_refresh_window_days: int = Field(
+        default=7,
+        description="Threads token 提前刷新窗口（天）",
     )
 
     # ===== 数据库配置 =====

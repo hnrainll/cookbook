@@ -45,10 +45,17 @@ async def oauth_callback(request: Request):
     from app.core.auth import AuthService
     from app.core.reply import ReplyService
 
-    oauth_token = request.query_params.get("oauth_token")
     platform = request.query_params.get("platform", "fanfou")
+    oauth_token = request.query_params.get("oauth_token")
+    code = request.query_params.get("code")
+    state = request.query_params.get("state")
 
-    if not oauth_token:
+    if platform == "threads":
+        if not code:
+            return {"message": "缺少 code 参数"}
+        if not state:
+            return {"message": "缺少 state 参数"}
+    elif not oauth_token:
         return {"message": "缺少 oauth_token 参数"}
 
     auth_service = AuthService.get_instance()

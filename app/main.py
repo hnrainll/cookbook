@@ -42,6 +42,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     db_manager = None
     fanfou_client = None
     mastodon_client = None
+    threads_client = None
     telegram_client = None
     feishu_manager = None
     auth_service = None
@@ -79,6 +80,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
 
             mastodon_client = MastodonClient.create_instance()
             await mastodon_client.start()
+
+        if settings.threads_enabled:
+            logger.info("Initializing Threads client...")
+            from app.services.platforms.threads.client import ThreadsAuthHandler, ThreadsClient
+
+            threads_client = ThreadsClient.create_instance()
+            await threads_client.start()
+
+            threads_auth_handler = ThreadsAuthHandler()
+            auth_service.register("threads", threads_auth_handler)
 
         # Step 4: Telegram Source + Sink
         if settings.telegram_enabled:
@@ -166,6 +177,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
             except Exception as e:
                 logger.error(f"Error stopping Mastodon: {e}")
 
+        if threads_client:
+            try:
+                await threads_client.stop()
+            except Exception as e:
+                logger.error(f"Error stopping Threads: {e}")
+
         if db_manager:
             try:
                 await db_manager.stop()
@@ -176,10 +193,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         from app.core.auth import AuthService
         from app.core.reply import ReplyService
         from app.services.platforms.mastodon.client import MastodonClient
+        from app.services.platforms.threads.client import ThreadsClient
 
         AuthService.reset_instance()
         ReplyService.reset_instance()
         MastodonClient.reset_instance()
+        ThreadsClient.reset_instance()
 
         logger.info("Shutdown complete!")
 
@@ -209,6 +228,7 @@ async def root():
             "feishu": settings.feishu_enabled,
             "fanfou": settings.fanfou_enabled,
             "mastodon": settings.mastodon_enabled,
+            "threads": settings.threads_enabled,
             "database": settings.database_enabled,
         },
     }

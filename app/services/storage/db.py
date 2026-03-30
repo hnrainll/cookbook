@@ -350,6 +350,16 @@ class DatabaseManager:
         await self.conn.commit()
         return cursor.rowcount > 0
 
+    async def delete_any_token_for_sink(self, sink_platform: str) -> bool:
+        if not self.conn:
+            return False
+        cursor = await self.conn.execute(
+            "DELETE FROM auth_tokens WHERE sink_platform = ?",
+            (sink_platform,),
+        )
+        await self.conn.commit()
+        return cursor.rowcount > 0
+
     # ===== 单例管理 =====
 
     @classmethod
