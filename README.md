@@ -1,6 +1,6 @@
 # Cookbook - 多平台消息同步网关
 
-通过飞书/Telegram 机器人向饭否、Mastodon、Threads 和 Telegram 频道同步消息，基于 Event Bus 架构实现多 Source → 多 Sink 的消息流转。
+通过飞书/Telegram 机器人向饭否、Mastodon、Threads、Bluesky 和 Telegram 频道同步消息，基于 Event Bus 架构实现多 Source → 多 Sink 的消息流转。
 
 ## 架构
 
@@ -19,6 +19,9 @@ Sources                    Core                        Sinks
                                           ├────▶│ Threads      │
                                           │     └──────────────┘
                                           │     ┌──────────────┐
+                                          ├────▶│ Bluesky      │
+                                          │     └──────────────┘
+                                          │     ┌──────────────┐
                                           └────▶│ SQLite       │
                                                 └──────────────┘
 ```
@@ -29,6 +32,7 @@ Sources                    Core                        Sinks
 - Telegram：文本消息同步到饭否和 Telegram 频道
 - Mastodon：文本、图片消息同步到 `mastodon.social` 或其他实例
 - Threads：文本消息同步到 Threads
+- Bluesky：文本、图片消息同步到 Bluesky
 - Telegram 频道转发：支持文本和图片，支持 `@username` 和数字 ID 两种频道配置
 - 图片自动压缩（≤2MB）
 - OAuth 授权管理（`/login fanfou`、`/login threads`、`/logout fanfou`、`/logout threads`），单用户模式，授权一次所有 Source 共享
@@ -101,7 +105,8 @@ app/
 │   │   ├── telegram/   # Telegram Source + Sink (aiogram polling + 频道转发)
 │   │   ├── fanfou/     # 饭否 Sink (httpx 异步)
 │   │   ├── mastodon/   # Mastodon Sink (httpx 异步)
-│   │   └── threads/    # Threads Sink + OAuth 2.0
+│   │   ├── threads/    # Threads Sink + OAuth 2.0
+│   │   └── bluesky/    # Bluesky Sink
 │   └── storage/
 │       └── db.py       # SQLite Sink (aiosqlite)
 └── main.py         # FastAPI 入口

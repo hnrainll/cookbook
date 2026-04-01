@@ -43,6 +43,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     fanfou_client = None
     mastodon_client = None
     threads_client = None
+    bluesky_client = None
     telegram_client = None
     feishu_manager = None
     auth_service = None
@@ -90,6 +91,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
 
             threads_auth_handler = ThreadsAuthHandler()
             auth_service.register("threads", threads_auth_handler)
+
+        if settings.bluesky_enabled:
+            logger.info("Initializing Bluesky client...")
+            from app.services.platforms.bluesky.client import BlueskyClient
+
+            bluesky_client = BlueskyClient.create_instance()
+            await bluesky_client.start()
 
         # Step 4: Telegram Source + Sink
         if settings.telegram_enabled:
@@ -183,6 +191,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
             except Exception as e:
                 logger.error(f"Error stopping Threads: {e}")
 
+        if bluesky_client:
+            try:
+                await bluesky_client.stop()
+            except Exception as e:
+                logger.error(f"Error stopping Bluesky: {e}")
+
         if db_manager:
             try:
                 await db_manager.stop()
@@ -192,11 +206,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         # 重置单例以便测试
         from app.core.auth import AuthService
         from app.core.reply import ReplyService
+        from app.services.platforms.bluesky.client import BlueskyClient
         from app.services.platforms.mastodon.client import MastodonClient
         from app.services.platforms.threads.client import ThreadsClient
 
         AuthService.reset_instance()
         ReplyService.reset_instance()
+        BlueskyClient.reset_instance()
         MastodonClient.reset_instance()
         ThreadsClient.reset_instance()
 
@@ -229,6 +245,7 @@ async def root():
             "fanfou": settings.fanfou_enabled,
             "mastodon": settings.mastodon_enabled,
             "threads": settings.threads_enabled,
+            "bluesky": settings.bluesky_enabled,
             "database": settings.database_enabled,
         },
     }

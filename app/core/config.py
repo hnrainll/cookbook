@@ -74,6 +74,18 @@ class Settings(BaseSettings):
         description="Threads token 提前刷新窗口（天）",
     )
 
+    # ===== Bluesky 配置 =====
+    bluesky_enabled: bool = Field(default=False, description="是否启用 Bluesky 集成")
+    bluesky_service_url: str = Field(
+        default="https://bsky.social",
+        description="Bluesky ATProto 服务地址",
+    )
+    bluesky_identifier: str = Field(
+        default="",
+        description="Bluesky 登录标识，通常为 handle 或邮箱",
+    )
+    bluesky_app_password: str = Field(default="", description="Bluesky app password")
+
     # ===== 数据库配置 =====
     database_enabled: bool = Field(default=True, description="是否启用数据库存储")
     database_path: str = Field(default="./data/messages.db", description="SQLite 数据库文件路径")
