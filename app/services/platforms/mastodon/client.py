@@ -12,6 +12,13 @@ from loguru import logger
 from app.core.bus import bus
 from app.core.config import settings
 from app.schemas.event import UnifiedMessage
+from app.services.platforms.limits import (
+    MASTODON_TEXT_LIMIT,
+    caption_too_long_error,
+    caption_too_long_reply,
+    text_too_long_error,
+    text_too_long_reply,
+)
 
 
 class MastodonClient:
@@ -23,9 +30,11 @@ class MastodonClient:
         self.base_url = settings.mastodon_base_url.rstrip("/")
         self.access_token = settings.mastodon_access_token
         self.visibility = settings.mastodon_visibility
+        self._max_characters: Optional[int] = None
         logger.info("MastodonClient initialized")
 
     async def start(self) -> None:
+        await self.get_max_characters()
         logger.info("Mastodon client started")
 
     async def stop(self) -> None:
@@ -35,6 +44,52 @@ class MastodonClient:
         return {
             "Authorization": f"Bearer {self.access_token}",
         }
+
+    async def get_max_characters(self) -> int:
+        if self._max_characters is not None:
+            return self._max_characters
+
+        self._max_characters = await self._fetch_max_characters()
+        return self._max_characters
+
+    async def _fetch_max_characters(self) -> int:
+        endpoints = ("/api/v2/instance", "/api/v1/instance")
+
+        async with httpx.AsyncClient(timeout=20) as client:
+            for endpoint in endpoints:
+                try:
+                    response = await client.get(f"{self.base_url}{endpoint}")
+                except Exception as e:
+                    logger.warning("Mastodon instance metadata request failed: {}", e)
+                    continue
+
+                if not response.is_success:
+                    logger.warning(
+                        "Mastodon instance metadata fetch failed: status_code={} endpoint={}",
+                        response.status_code,
+                        endpoint,
+                    )
+                    continue
+
+                max_characters = self._extract_max_characters(response.json())
+                if max_characters:
+                    return max_characters
+
+        return MASTODON_TEXT_LIMIT.default_limit
+
+    def _extract_max_characters(self, payload: dict) -> Optional[int]:
+        configuration = payload.get("configuration")
+        if not isinstance(configuration, dict):
+            return None
+
+        statuses = configuration.get("statuses")
+        if not isinstance(statuses, dict):
+            return None
+
+        max_characters = statuses.get("max_characters")
+        if isinstance(max_characters, int) and max_characters > 0:
+            return max_characters
+        return None
 
     async def post_text(self, text: str) -> Optional[dict]:
         """发布纯文本状态。"""
@@ -138,6 +193,20 @@ class MastodonClient:
         from app.core.reply import ReplyService
 
         reply_service = ReplyService.get_instance()
+        max_characters = await self.get_max_characters()
+        if len(message.content) > max_characters:
+            if reply_service:
+                reply_service.reply(
+                    message,
+                    text_too_long_reply(MASTODON_TEXT_LIMIT, max_characters),
+                )
+            await self._save_sink_result(
+                message,
+                None,
+                text_too_long_error(MASTODON_TEXT_LIMIT, max_characters),
+            )
+            return
+
         ret = await self.post_text(message.content)
         await self._save_sink_result(message, ret)
 
@@ -155,6 +224,21 @@ class MastodonClient:
                 reply_service.reply(message, "[Mastodon] 图片数据为空，无法发送。")
             return
 
+        if message.content:
+            max_characters = await self.get_max_characters()
+            if len(message.content) > max_characters:
+                if reply_service:
+                    reply_service.reply(
+                        message,
+                        caption_too_long_reply(MASTODON_TEXT_LIMIT, max_characters),
+                    )
+                await self._save_sink_result(
+                    message,
+                    None,
+                    caption_too_long_error(MASTODON_TEXT_LIMIT, max_characters),
+                )
+                return
+
         ret = await self.post_image(message.image_data, message.content or None)
         await self._save_sink_result(message, ret)
 
@@ -169,7 +253,12 @@ class MastodonClient:
             return f"[Mastodon] 消息发送成功\n\n{url}"
         return "[Mastodon] 消息发送成功"
 
-    async def _save_sink_result(self, message: UnifiedMessage, ret: Optional[dict]) -> None:
+    async def _save_sink_result(
+        self,
+        message: UnifiedMessage,
+        ret: Optional[dict],
+        error_message: str = "发送到 Mastodon 失败",
+    ) -> None:
         from app.services.storage.db import DatabaseManager
 
         db = DatabaseManager.get_instance()
@@ -190,7 +279,7 @@ class MastodonClient:
                 event_id=str(message.event_id),
                 sink_platform="mastodon",
                 success=False,
-                error_message="发送到 Mastodon 失败",
+                error_message=error_message,
             )
 
     @classmethod

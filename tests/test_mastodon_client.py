@@ -3,7 +3,7 @@
 import asyncio
 import os
 import tempfile
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -63,6 +63,11 @@ class MockResponse:
 
 
 class TestMastodonClient:
+    def test_extract_max_characters(self):
+        client = MastodonClient()
+        payload = {"configuration": {"statuses": {"max_characters": 1337}}}
+        assert client._extract_max_characters(payload) == 1337
+
     def test_post_text_no_token(self):
         loop = asyncio.new_event_loop()
         try:
@@ -155,3 +160,29 @@ class TestMastodonClient:
             assert replies == ["[Mastodon] 图片数据为空，无法发送。"]
         finally:
             loop.close()
+
+    def test_handle_text_too_long_uses_instance_limit(self, db_manager):
+        _mgr, loop = db_manager
+        ReplyService.create_instance()
+        replies = []
+        reply_service = ReplyService.get_instance()
+        assert reply_service is not None
+        reply_service.register(
+            MessageSource.FEISHU,
+            reply_handler=lambda m, t: replies.append(t),
+        )
+
+        client = MastodonClient()
+        client._max_characters = 5
+
+        with patch.object(client, "post_text", AsyncMock()) as mock_post_text:
+            msg = UnifiedMessage(
+                source=MessageSource.FEISHU,
+                content="toolong",
+                message_type="text",
+                sender_id="user1",
+            )
+            loop.run_until_complete(client.handle_message(msg))
+
+        mock_post_text.assert_not_called()
+        assert replies == ["[Mastodon] 消息长度超过当前实例 5 字限制，无法发送"]

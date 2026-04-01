@@ -258,6 +258,30 @@ class TestThreadsClient:
         mock_post_text.assert_not_called()
         assert replies == []
 
+    def test_handle_text_too_long(self, db_manager):
+        _mgr, loop = db_manager
+        ReplyService.create_instance()
+        replies = []
+        reply_service = ReplyService.get_instance()
+        assert reply_service is not None
+        reply_service.register(
+            MessageSource.FEISHU,
+            reply_handler=lambda m, t: replies.append(t),
+        )
+
+        client = ThreadsClient()
+        with patch.object(client, "post_text", AsyncMock()) as mock_post_text:
+            msg = UnifiedMessage(
+                source=MessageSource.FEISHU,
+                content="x" * 501,
+                message_type="text",
+                sender_id="user1",
+            )
+            loop.run_until_complete(client.handle_message(msg))
+
+        mock_post_text.assert_not_called()
+        assert replies == ["[Threads] 消息长度超过 500 字，无法发送"]
+
     def test_publish_container_refreshes_on_auth_error(self):
         loop = asyncio.new_event_loop()
         try:

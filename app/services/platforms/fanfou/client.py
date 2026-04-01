@@ -18,6 +18,13 @@ from app.core.bus import bus
 from app.core.config import settings
 from app.schemas.event import UnifiedMessage
 from app.services.platforms.fanfou.sdk import Fanfou
+from app.services.platforms.limits import (
+    FANFOU_TEXT_LIMIT,
+    caption_too_long_error,
+    caption_too_long_reply,
+    text_too_long_error,
+    text_too_long_reply,
+)
 
 
 class FanfouAuthHandler:
@@ -241,9 +248,13 @@ class FanfouClient:
         from app.core.reply import ReplyService
 
         reply_service = ReplyService.get_instance()
+        if len(message.content) > FANFOU_TEXT_LIMIT.default_limit:
+            if reply_service:
+                reply_service.reply(message, text_too_long_reply(FANFOU_TEXT_LIMIT))
+            await self._save_sink_result(message, None, text_too_long_error(FANFOU_TEXT_LIMIT))
+            return
 
         ret = await self.post_text(message.content)
-
         await self._save_sink_result(message, ret)
 
         if reply_service and ret:
@@ -266,6 +277,12 @@ class FanfouClient:
             return
 
         text = message.content if message.content else None
+        if text and len(text) > FANFOU_TEXT_LIMIT.default_limit:
+            if reply_service:
+                reply_service.reply(message, caption_too_long_reply(FANFOU_TEXT_LIMIT))
+            await self._save_sink_result(message, None, caption_too_long_error(FANFOU_TEXT_LIMIT))
+            return
+
         ret = await self.post_photo(message.image_data, text)
 
         await self._save_sink_result(message, ret)
@@ -278,7 +295,12 @@ class FanfouClient:
         elif reply_service:
             reply_service.reply(message, "[饭否] 图片发送失败")
 
-    async def _save_sink_result(self, message: UnifiedMessage, ret: Optional[dict]) -> None:
+    async def _save_sink_result(
+        self,
+        message: UnifiedMessage,
+        ret: Optional[dict],
+        error_message: str = "发送失败",
+    ) -> None:
         """保存发送结果到数据库"""
         from app.services.storage.db import DatabaseManager
 
@@ -300,7 +322,7 @@ class FanfouClient:
                 event_id=str(message.event_id),
                 sink_platform="fanfou",
                 success=False,
-                error_message="发送失败",
+                error_message=error_message,
             )
 
     @classmethod

@@ -37,7 +37,7 @@ Sources                    Core                        Sinks
 - 图片自动压缩（≤2MB）
 - OAuth 授权管理（`/login fanfou`、`/login threads`、`/logout fanfou`、`/logout threads`），单用户模式，授权一次所有 Source 共享
 - 消息持久化到 SQLite，发送结果记录到 sink_results 表
-- 消息去重、140 字符限制检查
+- 消息去重、按平台做字符限制检查
 - 支持代理访问 Telegram API
 - Threads 长期 token 自动刷新
 - OAuth 回调建议显式带平台参数，例如 `/auth?platform=fanfou`、`/auth?platform=threads`

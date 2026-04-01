@@ -182,6 +182,39 @@ class TestFanfouHandleMessage:
             bus.clear_handlers()
             loop.close()
 
+    def test_handle_text_too_long(self):
+        """Text longer than Fanfou limit is rejected by sink."""
+        loop = asyncio.new_event_loop()
+        try:
+            ReplyService.create_instance()
+            replies = []
+            ReplyService.get_instance().register(
+                MessageSource.FEISHU,
+                reply_handler=lambda m, t: replies.append(t),
+            )
+
+            from app.core.bus import bus
+
+            bus.clear_handlers()
+
+            client = FanfouClient()
+
+            with patch.object(client, "post_text", AsyncMock()) as mock_post_text:
+                msg = UnifiedMessage(
+                    source=MessageSource.FEISHU,
+                    content="x" * 141,
+                    message_type="text",
+                    sender_id="user1",
+                    raw_data={"message_id": "mid1"},
+                )
+                loop.run_until_complete(client.handle_message(msg))
+
+            mock_post_text.assert_not_called()
+            assert replies == ["[饭否] 消息长度超过 140 字，无法发送"]
+        finally:
+            bus.clear_handlers()
+            loop.close()
+
     def test_handle_image_no_data(self):
         """Image message without image_data fails."""
         loop = asyncio.new_event_loop()

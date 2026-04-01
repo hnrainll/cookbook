@@ -199,11 +199,6 @@ class FeishuManager:
             self._publish_to_bus(msg)
             return
 
-        # 检查长度
-        if len(content) > 140:
-            self.reply_message(message_id, "消息长度大于140，无法发送。")
-            return
-
         msg = UnifiedMessage(
             source=MessageSource.FEISHU,
             content=content,
@@ -269,10 +264,6 @@ class FeishuManager:
             )
             self._publish_to_bus(msg)
         elif text:
-            if len(text) > 140:
-                self.reply_message(message_id, "消息长度大于140，无法发送。")
-                return
-
             msg = UnifiedMessage(
                 source=MessageSource.FEISHU,
                 content=text,

@@ -13,6 +13,13 @@ from loguru import logger
 from app.core.bus import bus
 from app.core.config import settings
 from app.schemas.event import UnifiedMessage
+from app.services.platforms.limits import (
+    BLUESKY_TEXT_LIMIT,
+    caption_too_long_error,
+    caption_too_long_reply,
+    text_too_long_error,
+    text_too_long_reply,
+)
 
 BLUESKY_POST_COLLECTION = "app.bsky.feed.post"
 BLUESKY_IMAGE_LIMIT_BYTES = 1_000_000
@@ -71,6 +78,16 @@ class BlueskyClient:
         from app.core.reply import ReplyService
 
         reply_service = ReplyService.get_instance()
+        if len(message.content) > BLUESKY_TEXT_LIMIT.default_limit:
+            if reply_service:
+                reply_service.reply(message, text_too_long_reply(BLUESKY_TEXT_LIMIT))
+            await self._save_sink_result(
+                message,
+                None,
+                text_too_long_error(BLUESKY_TEXT_LIMIT),
+            )
+            return
+
         ret = await self.post_text(message.content)
         await self._save_sink_result(message, ret)
 
@@ -87,6 +104,16 @@ class BlueskyClient:
         if not message.image_data:
             if reply_service:
                 reply_service.reply(message, "[Bluesky] 图片数据为空，无法发送。")
+            return
+
+        if message.content and len(message.content) > BLUESKY_TEXT_LIMIT.default_limit:
+            if reply_service:
+                reply_service.reply(message, caption_too_long_reply(BLUESKY_TEXT_LIMIT))
+            await self._save_sink_result(
+                message,
+                None,
+                caption_too_long_error(BLUESKY_TEXT_LIMIT),
+            )
             return
 
         ret = await self.post_image(message.image_data, message.content or None)
@@ -253,7 +280,12 @@ class BlueskyClient:
 
         return f"https://bsky.app/profile/{handle}/post/{record_key}"
 
-    async def _save_sink_result(self, message: UnifiedMessage, ret: Optional[dict]) -> None:
+    async def _save_sink_result(
+        self,
+        message: UnifiedMessage,
+        ret: Optional[dict],
+        error_message: str = "发送到 Bluesky 失败",
+    ) -> None:
         from app.services.storage.db import DatabaseManager
 
         db = DatabaseManager.get_instance()
@@ -274,7 +306,7 @@ class BlueskyClient:
                 event_id=str(message.event_id),
                 sink_platform="bluesky",
                 success=False,
-                error_message="发送到 Bluesky 失败",
+                error_message=error_message,
             )
 
     @classmethod

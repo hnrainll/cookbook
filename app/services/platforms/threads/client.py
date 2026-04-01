@@ -14,6 +14,11 @@ from loguru import logger
 from app.core.bus import bus
 from app.core.config import settings
 from app.schemas.event import UnifiedMessage
+from app.services.platforms.limits import (
+    THREADS_TEXT_LIMIT,
+    text_too_long_error,
+    text_too_long_reply,
+)
 
 THREADS_SCOPES = "threads_basic,threads_content_publish"
 THREADS_AUTHORIZE_URL = "https://threads.net/oauth/authorize"
@@ -196,6 +201,16 @@ class ThreadsClient:
         from app.core.reply import ReplyService
 
         reply_service = ReplyService.get_instance()
+        if len(message.content) > THREADS_TEXT_LIMIT.default_limit:
+            if reply_service:
+                reply_service.reply(message, text_too_long_reply(THREADS_TEXT_LIMIT))
+            await self._save_sink_result(
+                message,
+                None,
+                text_too_long_error(THREADS_TEXT_LIMIT),
+            )
+            return
+
         ret = await self.post_text(message.content)
         await self._save_sink_result(message, ret)
 
@@ -395,7 +410,12 @@ class ThreadsClient:
             return code in (190, 102) or "access token" in message
         return False
 
-    async def _save_sink_result(self, message: UnifiedMessage, ret: Optional[dict]) -> None:
+    async def _save_sink_result(
+        self,
+        message: UnifiedMessage,
+        ret: Optional[dict],
+        error_message: str = "发送到 Threads 失败",
+    ) -> None:
         from app.services.storage.db import DatabaseManager
 
         db = DatabaseManager.get_instance()
@@ -417,7 +437,7 @@ class ThreadsClient:
                 event_id=str(message.event_id),
                 sink_platform="threads",
                 success=False,
-                error_message="发送到 Threads 失败",
+                error_message=error_message,
             )
 
     @classmethod
