@@ -1,4 +1,4 @@
-.PHONY: run dev test install format lint type check
+.PHONY: run dev test install format format-check lint type check
 
 # 启动服务
 run:
@@ -16,6 +16,10 @@ test:
 format:
 	uv run ruff format .
 
+# 检查代码格式是否符合 ruff formatter
+format-check:
+	uv run ruff format --check .
+
 # 静态检查
 lint:
 	uv run ruff check .
@@ -25,7 +29,7 @@ type:
 	uv run ty check
 
 # 本地完整检查
-check: lint type test
+check: format-check lint type test
 
 # 安装依赖
 install:

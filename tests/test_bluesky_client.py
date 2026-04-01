@@ -114,7 +114,10 @@ class TestBlueskyClient:
             }
         )
 
-        assert text == "[Bluesky] 消息发送成功\n\nhttps://bsky.app/profile/tester.bsky.social/post/abc123"
+        assert (
+            text
+            == "[Bluesky] 消息发送成功\n\nhttps://bsky.app/profile/tester.bsky.social/post/abc123"
+        )
 
     def test_post_image_too_large(self):
         loop = asyncio.new_event_loop()

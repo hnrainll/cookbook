@@ -1,2 +1,1 @@
 """Threads platform integration."""
-
