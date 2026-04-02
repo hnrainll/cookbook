@@ -15,7 +15,7 @@ class TestPages:
         app.include_router(router)
 
         client = TestClient(app)
-        response = client.get("/meta/privacy")
+        response = client.get("/privacy")
 
         assert response.status_code == 200
         assert "text/html" in response.headers["content-type"]
@@ -27,7 +27,7 @@ class TestPages:
         app.include_router(router)
 
         client = TestClient(app)
-        response = client.get("/meta/data-deletion")
+        response = client.get("/data-deletion")
 
         assert response.status_code == 200
         assert "text/html" in response.headers["content-type"]
@@ -39,7 +39,7 @@ class TestPages:
 
         client = TestClient(app)
         with patch("app.routes.pages.settings.public_contact_email", "public@example.test"):
-            response = client.get("/meta/privacy")
+            response = client.get("/privacy")
 
         assert response.status_code == 200
         assert "public@example.test" in response.text

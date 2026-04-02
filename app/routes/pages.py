@@ -265,7 +265,7 @@ DATA_DELETION_TEMPLATE = (
 )
 
 
-@router.get("/meta/privacy", response_class=HTMLResponse)
+@router.get("/privacy", response_class=HTMLResponse)
 async def privacy_policy() -> HTMLResponse:
     return HTMLResponse(
         content=PRIVACY_POLICY_TEMPLATE.replace(
@@ -275,7 +275,7 @@ async def privacy_policy() -> HTMLResponse:
     )
 
 
-@router.get("/meta/data-deletion", response_class=HTMLResponse)
+@router.get("/data-deletion", response_class=HTMLResponse)
 async def data_deletion_instructions() -> HTMLResponse:
     return HTMLResponse(
         content=DATA_DELETION_TEMPLATE.replace(
