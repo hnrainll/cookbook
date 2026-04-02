@@ -1,6 +1,7 @@
 """Tests for Bluesky client components."""
 
 import asyncio
+import json
 import os
 import tempfile
 from unittest.mock import AsyncMock, patch
@@ -66,6 +67,217 @@ class MockResponse:
 
 
 class TestBlueskyClient:
+    def test_start_loads_persisted_session(self, db_manager):
+        mgr, loop = db_manager
+        loop.run_until_complete(
+            mgr.save_user_token(
+                source_platform="shared",
+                source_user_id="shared",
+                sink_platform="bluesky",
+                token_data=json.dumps(
+                    {
+                        "did": "did:plc:test",
+                        "accessJwt": "persisted-access",
+                        "refreshJwt": "persisted-refresh",
+                        "handle": "tester.bsky.social",
+                    }
+                ),
+            )
+        )
+
+        client = BlueskyClient()
+        loop.run_until_complete(client.start())
+
+        assert client._session is not None
+        assert client._session["accessJwt"] == "persisted-access"
+        assert client._session["refreshJwt"] == "persisted-refresh"
+
+    def test_get_session_uses_refresh_jwt_before_create_session(self):
+        loop = asyncio.new_event_loop()
+        try:
+            client = BlueskyClient()
+            client._session = {
+                "did": "did:plc:test",
+                "accessJwt": "",
+                "refreshJwt": "refresh-jwt",
+                "handle": "tester.bsky.social",
+            }
+
+            with patch("httpx.AsyncClient.post") as mock_post:
+                mock_post.return_value = MockResponse(
+                    200,
+                    {
+                        "did": "did:plc:new",
+                        "accessJwt": "fresh-jwt",
+                        "refreshJwt": "fresh-refresh-jwt",
+                        "handle": "tester.bsky.social",
+                    },
+                )
+
+                result = loop.run_until_complete(client._get_session())
+
+            assert result is not None
+            assert result["accessJwt"] == "fresh-jwt"
+            assert mock_post.call_count == 1
+            assert mock_post.call_args.kwargs["headers"]["Authorization"] == "Bearer refresh-jwt"
+            assert mock_post.call_args.args[0].endswith("/xrpc/com.atproto.server.refreshSession")
+        finally:
+            loop.close()
+
+    def test_create_session_persists_session(self, db_manager):
+        mgr, loop = db_manager
+        client = BlueskyClient()
+        client.identifier = "tester.bsky.social"
+        client.app_password = "app-password"
+
+        with patch("httpx.AsyncClient.post") as mock_post:
+            mock_post.return_value = MockResponse(
+                200,
+                {
+                    "did": "did:plc:new",
+                    "accessJwt": "fresh-jwt",
+                    "refreshJwt": "fresh-refresh-jwt",
+                    "handle": "tester.bsky.social",
+                },
+            )
+
+            result = loop.run_until_complete(client._create_session())
+
+        assert result is not None
+        token_data = loop.run_until_complete(mgr.get_any_token_for_sink("bluesky"))
+        assert token_data is not None
+        payload = json.loads(token_data)
+        assert payload["accessJwt"] == "fresh-jwt"
+        assert payload["refreshJwt"] == "fresh-refresh-jwt"
+
+    def test_get_session_falls_back_to_create_session_when_refresh_fails(self):
+        loop = asyncio.new_event_loop()
+        try:
+            client = BlueskyClient()
+            client.identifier = "tester.bsky.social"
+            client.app_password = "app-password"
+            client._session = {
+                "did": "did:plc:test",
+                "accessJwt": "",
+                "refreshJwt": "expired-refresh-jwt",
+                "handle": "tester.bsky.social",
+            }
+
+            with patch("httpx.AsyncClient.post") as mock_post:
+                mock_post.side_effect = [
+                    MockResponse(
+                        401,
+                        {"error": "ExpiredToken", "message": "Token has expired"},
+                    ),
+                    MockResponse(
+                        200,
+                        {
+                            "did": "did:plc:new",
+                            "accessJwt": "fresh-jwt",
+                            "refreshJwt": "fresh-refresh-jwt",
+                            "handle": "tester.bsky.social",
+                        },
+                    ),
+                ]
+
+                result = loop.run_until_complete(client._get_session())
+
+            assert result is not None
+            assert result["accessJwt"] == "fresh-jwt"
+            assert mock_post.call_count == 2
+            assert mock_post.call_args_list[0].args[0].endswith(
+                "/xrpc/com.atproto.server.refreshSession"
+            )
+            assert mock_post.call_args_list[0].kwargs["headers"]["Authorization"] == (
+                "Bearer expired-refresh-jwt"
+            )
+            assert mock_post.call_args_list[1].args[0].endswith(
+                "/xrpc/com.atproto.server.createSession"
+            )
+            assert mock_post.call_args_list[1].kwargs["json"] == {
+                "identifier": "tester.bsky.social",
+                "password": "app-password",
+            }
+        finally:
+            loop.close()
+
+    def test_refresh_session_persists_session(self, db_manager):
+        mgr, loop = db_manager
+        client = BlueskyClient()
+
+        with patch("httpx.AsyncClient.post") as mock_post:
+            mock_post.return_value = MockResponse(
+                200,
+                {
+                    "did": "did:plc:new",
+                    "accessJwt": "fresh-jwt",
+                    "refreshJwt": "fresh-refresh-jwt",
+                    "handle": "tester.bsky.social",
+                },
+            )
+
+            result = loop.run_until_complete(client._refresh_session("refresh-jwt"))
+
+        assert result is not None
+        token_data = loop.run_until_complete(mgr.get_any_token_for_sink("bluesky"))
+        assert token_data is not None
+        payload = json.loads(token_data)
+        assert payload["accessJwt"] == "fresh-jwt"
+        assert payload["refreshJwt"] == "fresh-refresh-jwt"
+
+    def test_post_text_refreshes_expired_token(self):
+        loop = asyncio.new_event_loop()
+        try:
+            client = BlueskyClient()
+            client._session = {
+                "did": "did:plc:old",
+                "accessJwt": "expired-jwt",
+                "refreshJwt": "refresh-jwt",
+                "handle": "tester.bsky.social",
+            }
+
+            with (
+                patch.object(
+                    client,
+                    "_refresh_or_create_session",
+                    AsyncMock(
+                        return_value={
+                            "did": "did:plc:new",
+                            "accessJwt": "fresh-jwt",
+                            "refreshJwt": "fresh-refresh-jwt",
+                            "handle": "tester.bsky.social",
+                        }
+                    ),
+                ) as mock_refresh_or_create,
+                patch("httpx.AsyncClient.post") as mock_post,
+            ):
+                mock_post.side_effect = [
+                    MockResponse(
+                        400,
+                        {
+                            "error": "ExpiredToken",
+                            "message": "Token has expired",
+                        },
+                    ),
+                    MockResponse(
+                        200,
+                        {
+                            "uri": "at://did:plc:new/app.bsky.feed.post/abc123",
+                            "cid": "bafy123",
+                        },
+                    ),
+                ]
+
+                result = loop.run_until_complete(client.post_text("hello"))
+
+            assert result is not None
+            assert result["cid"] == "bafy123"
+            assert mock_refresh_or_create.await_count == 1
+            assert mock_post.call_args_list[0].kwargs["headers"]["Authorization"] == "Bearer expired-jwt"
+            assert mock_post.call_args_list[1].kwargs["headers"]["Authorization"] == "Bearer fresh-jwt"
+        finally:
+            loop.close()
+
     def test_post_text_no_credentials(self):
         loop = asyncio.new_event_loop()
         try:
@@ -126,6 +338,71 @@ class TestBlueskyClient:
             payload = b"x" * (BLUESKY_IMAGE_LIMIT_BYTES + 1)
             result = loop.run_until_complete(client.post_image(payload, "caption"))
             assert result is None
+        finally:
+            loop.close()
+
+    def test_post_image_refreshes_expired_token_during_upload(self):
+        loop = asyncio.new_event_loop()
+        try:
+            client = BlueskyClient()
+            client._session = {
+                "did": "did:plc:old",
+                "accessJwt": "expired-jwt",
+                "refreshJwt": "refresh-jwt",
+                "handle": "tester.bsky.social",
+            }
+
+            with (
+                patch.object(
+                    client,
+                    "_refresh_or_create_session",
+                    AsyncMock(
+                        return_value={
+                            "did": "did:plc:new",
+                            "accessJwt": "fresh-jwt",
+                            "refreshJwt": "fresh-refresh-jwt",
+                            "handle": "tester.bsky.social",
+                        }
+                    ),
+                ) as mock_refresh_or_create,
+                patch("httpx.AsyncClient.post") as mock_post,
+            ):
+                mock_post.side_effect = [
+                    MockResponse(
+                        400,
+                        {
+                            "error": "ExpiredToken",
+                            "message": "Token has expired",
+                        },
+                    ),
+                    MockResponse(
+                        200,
+                        {
+                            "blob": {
+                                "$type": "blob",
+                                "ref": {"$link": "bafkrei123"},
+                                "mimeType": "image/jpeg",
+                                "size": 123,
+                            }
+                        },
+                    ),
+                    MockResponse(
+                        200,
+                        {
+                            "uri": "at://did:plc:new/app.bsky.feed.post/abc123",
+                            "cid": "bafy123",
+                        },
+                    ),
+                ]
+
+                result = loop.run_until_complete(client.post_image(b"image-bytes", "caption"))
+
+            assert result is not None
+            assert result["cid"] == "bafy123"
+            assert mock_refresh_or_create.await_count == 1
+            assert mock_post.call_args_list[0].kwargs["headers"]["Authorization"] == "Bearer expired-jwt"
+            assert mock_post.call_args_list[1].kwargs["headers"]["Authorization"] == "Bearer fresh-jwt"
+            assert mock_post.call_args_list[2].kwargs["headers"]["Authorization"] == "Bearer fresh-jwt"
         finally:
             loop.close()
 
