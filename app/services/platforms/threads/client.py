@@ -133,13 +133,12 @@ class ThreadsAuthHandler:
         params = {
             "grant_type": "th_exchange_token",
             "client_secret": self.app_secret,
+            "access_token": access_token,
         }
-        headers = {"Authorization": f"Bearer {access_token}"}
         async with httpx.AsyncClient(timeout=20) as client:
             response = await client.get(
                 f"{self.base_url}/access_token",
                 params=params,
-                headers=headers,
             )
 
         if response.is_success:
@@ -326,13 +325,14 @@ class ThreadsClient:
         return None
 
     async def refresh_access_token(self, access_token: str) -> Optional[dict]:
-        params = {"grant_type": "th_refresh_token"}
-        headers = {"Authorization": f"Bearer {access_token}"}
+        params = {
+            "grant_type": "th_refresh_token",
+            "access_token": access_token,
+        }
         async with httpx.AsyncClient(timeout=20) as client:
             response = await client.get(
                 f"{self.base_url}/refresh_access_token",
                 params=params,
-                headers=headers,
             )
 
         if not response.is_success:

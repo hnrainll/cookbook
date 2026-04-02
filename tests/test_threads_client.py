@@ -68,6 +68,33 @@ class MockResponse:
 
 
 class TestThreadsAuthHandler:
+    def test_exchange_for_long_lived_token_uses_access_token_param(self):
+        loop = asyncio.new_event_loop()
+        try:
+            handler = ThreadsAuthHandler()
+            handler.app_secret = "secret123"
+
+            with patch("httpx.AsyncClient.get") as mock_get:
+                mock_get.return_value = MockResponse(
+                    200,
+                    {
+                        "access_token": "long",
+                        "token_type": "bearer",
+                        "expires_in": 5184000,
+                    },
+                )
+
+                result = loop.run_until_complete(handler.exchange_for_long_lived_token("short123"))
+
+            assert result is not None
+            assert mock_get.call_args.kwargs["params"] == {
+                "grant_type": "th_exchange_token",
+                "client_secret": "secret123",
+                "access_token": "short123",
+            }
+        finally:
+            loop.close()
+
     def test_gen_auth_url_saves_state(self, db_manager):
         mgr, loop = db_manager
         handler = ThreadsAuthHandler()
@@ -198,6 +225,31 @@ class TestThreadsAuthHandler:
 
 
 class TestThreadsClient:
+    def test_refresh_access_token_uses_access_token_param(self):
+        loop = asyncio.new_event_loop()
+        try:
+            client = ThreadsClient()
+
+            with patch("httpx.AsyncClient.get") as mock_get:
+                mock_get.return_value = MockResponse(
+                    200,
+                    {
+                        "access_token": "refreshed",
+                        "token_type": "bearer",
+                        "expires_in": 5184000,
+                    },
+                )
+
+                result = loop.run_until_complete(client.refresh_access_token("long123"))
+
+            assert result is not None
+            assert mock_get.call_args.kwargs["params"] == {
+                "grant_type": "th_refresh_token",
+                "access_token": "long123",
+            }
+        finally:
+            loop.close()
+
     def test_post_text_no_token(self):
         loop = asyncio.new_event_loop()
         try:
