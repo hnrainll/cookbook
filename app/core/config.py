@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     app_name: str = Field(default="Message Sync Gateway", description="应用名称")
     host: str = Field(default="0.0.0.0", description="服务监听地址")
     port: int = Field(default=8009, description="服务监听端口")
+    public_contact_email: str = Field(
+        default="privacy@example.com",
+        description="公开页面使用的联系邮箱",
+    )
 
     # ===== 飞书配置 =====
     feishu_enabled: bool = Field(default=False, description="是否启用飞书集成")
