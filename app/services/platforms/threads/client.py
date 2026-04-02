@@ -84,11 +84,12 @@ class ThreadsAuthHandler:
             return "授权失败：无法获取短期 token", source_user_id
 
         long_token = await self.exchange_for_long_lived_token(short_token["access_token"])
-        if not long_token:
-            await db.delete_request_token(state)
-            return "授权失败：无法换取长期 token", source_user_id
-
-        payload = self._normalize_token_payload(long_token)
+        if long_token:
+            payload = self._normalize_token_payload(long_token)
+            result_message = "Threads 授权成功"
+        else:
+            payload = self._normalize_token_payload(short_token)
+            result_message = "Threads 授权成功（使用短期 token，未换取长期 token）"
 
         await db.save_user_token(
             source_platform="shared",
@@ -97,7 +98,7 @@ class ThreadsAuthHandler:
             token_data=json.dumps(payload),
         )
         await db.delete_request_token(state)
-        return "Threads 授权成功", source_user_id
+        return result_message, source_user_id
 
     async def remove_auth(self, user_id: str) -> bool:
         from app.services.storage.db import DatabaseManager

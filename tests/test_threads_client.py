@@ -149,6 +149,53 @@ class TestThreadsAuthHandler:
         assert result is True
         assert loop.run_until_complete(mgr.get_any_token_for_sink("threads")) is None
 
+    def test_handle_callback_falls_back_to_short_lived_token(self, db_manager):
+        mgr, loop = db_manager
+        handler = ThreadsAuthHandler()
+
+        state = "state123"
+        loop.run_until_complete(
+            mgr.save_request_token(
+                oauth_token=state,
+                source_platform="shared",
+                source_user_id="user1",
+                sink_platform="threads",
+                token_data=json.dumps({"state": state}),
+            )
+        )
+
+        with (
+            patch.object(
+                handler,
+                "exchange_code_for_short_lived_token",
+                AsyncMock(
+                    return_value={
+                        "access_token": "short",
+                        "token_type": "bearer",
+                        "expires_in": 3600,
+                    }
+                ),
+            ),
+            patch.object(
+                handler,
+                "exchange_for_long_lived_token",
+                AsyncMock(return_value=None),
+            ),
+        ):
+            message, user_id = loop.run_until_complete(
+                handler.handle_callback({"state": state, "code": "code123"})
+            )
+
+        assert message == "Threads 授权成功（使用短期 token，未换取长期 token）"
+        assert user_id == "user1"
+
+        token_data = loop.run_until_complete(mgr.get_any_token_for_sink("threads"))
+        assert token_data is not None
+        payload = json.loads(token_data)
+        assert payload["access_token"] == "short"
+        assert payload["expires_in"] == 3600
+        assert payload["expires_at"] is not None
+
 
 class TestThreadsClient:
     def test_post_text_no_token(self):
