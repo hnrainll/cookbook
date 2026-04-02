@@ -185,14 +185,18 @@ class TestBlueskyClient:
             assert result is not None
             assert result["accessJwt"] == "fresh-jwt"
             assert mock_post.call_count == 2
-            assert mock_post.call_args_list[0].args[0].endswith(
-                "/xrpc/com.atproto.server.refreshSession"
+            assert (
+                mock_post.call_args_list[0]
+                .args[0]
+                .endswith("/xrpc/com.atproto.server.refreshSession")
             )
             assert mock_post.call_args_list[0].kwargs["headers"]["Authorization"] == (
                 "Bearer expired-refresh-jwt"
             )
-            assert mock_post.call_args_list[1].args[0].endswith(
-                "/xrpc/com.atproto.server.createSession"
+            assert (
+                mock_post.call_args_list[1]
+                .args[0]
+                .endswith("/xrpc/com.atproto.server.createSession")
             )
             assert mock_post.call_args_list[1].kwargs["json"] == {
                 "identifier": "tester.bsky.social",
@@ -273,8 +277,13 @@ class TestBlueskyClient:
             assert result is not None
             assert result["cid"] == "bafy123"
             assert mock_refresh_or_create.await_count == 1
-            assert mock_post.call_args_list[0].kwargs["headers"]["Authorization"] == "Bearer expired-jwt"
-            assert mock_post.call_args_list[1].kwargs["headers"]["Authorization"] == "Bearer fresh-jwt"
+            assert (
+                mock_post.call_args_list[0].kwargs["headers"]["Authorization"]
+                == "Bearer expired-jwt"
+            )
+            assert (
+                mock_post.call_args_list[1].kwargs["headers"]["Authorization"] == "Bearer fresh-jwt"
+            )
         finally:
             loop.close()
 
@@ -400,9 +409,16 @@ class TestBlueskyClient:
             assert result is not None
             assert result["cid"] == "bafy123"
             assert mock_refresh_or_create.await_count == 1
-            assert mock_post.call_args_list[0].kwargs["headers"]["Authorization"] == "Bearer expired-jwt"
-            assert mock_post.call_args_list[1].kwargs["headers"]["Authorization"] == "Bearer fresh-jwt"
-            assert mock_post.call_args_list[2].kwargs["headers"]["Authorization"] == "Bearer fresh-jwt"
+            assert (
+                mock_post.call_args_list[0].kwargs["headers"]["Authorization"]
+                == "Bearer expired-jwt"
+            )
+            assert (
+                mock_post.call_args_list[1].kwargs["headers"]["Authorization"] == "Bearer fresh-jwt"
+            )
+            assert (
+                mock_post.call_args_list[2].kwargs["headers"]["Authorization"] == "Bearer fresh-jwt"
+            )
         finally:
             loop.close()
 
