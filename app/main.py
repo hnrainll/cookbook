@@ -11,7 +11,9 @@ from fastapi import FastAPI
 from loguru import logger
 
 from app.core.config import settings
+from app.routes.auth import router as auth_router
 from app.services.platforms.feishu.handler import router as feishu_router
+from app.services.platforms.threads.handler import router as threads_router
 from app.services.storage.db import DatabaseManager
 
 # 配置日志
@@ -226,6 +228,10 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+app.include_router(auth_router)
+app.include_router(feishu_router)
+app.include_router(threads_router)
 
 
 # ===== 路由注册 =====

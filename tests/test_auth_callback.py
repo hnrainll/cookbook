@@ -1,4 +1,4 @@
-"""Tests for OAuth callback route"""
+"""Tests for auth and callback routes"""
 
 import pytest
 from fastapi.testclient import TestClient
@@ -34,7 +34,7 @@ class TestOAuthCallback:
         """Missing oauth_token returns error."""
         from fastapi import FastAPI
 
-        from app.services.platforms.feishu.handler import router
+        from app.routes.auth import router
 
         app = FastAPI()
         app.include_router(router)
@@ -52,7 +52,7 @@ class TestOAuthCallback:
         """AuthService not initialized returns error."""
         from fastapi import FastAPI
 
-        from app.services.platforms.feishu.handler import router
+        from app.routes.auth import router
 
         app = FastAPI()
         app.include_router(router)
@@ -67,7 +67,7 @@ class TestOAuthCallback:
         """OAuth callback routes to correct platform handler."""
         from fastapi import FastAPI
 
-        from app.services.platforms.feishu.handler import router
+        from app.routes.auth import router
 
         app = FastAPI()
         app.include_router(router)
@@ -96,7 +96,7 @@ class TestOAuthCallback:
         """Default platform is fanfou when not specified."""
         from fastapi import FastAPI
 
-        from app.services.platforms.feishu.handler import router
+        from app.routes.auth import router
 
         app = FastAPI()
         app.include_router(router)
@@ -124,3 +124,16 @@ class TestOAuthCallback:
 
         assert len(callbacks) == 1
         assert callbacks[0]["oauth_token"] == "tok123"
+
+    def test_threads_callback_returns_ok(self):
+        from fastapi import FastAPI
+
+        from app.services.platforms.threads.handler import router
+
+        app = FastAPI()
+        app.include_router(router)
+
+        client = TestClient(app)
+        response = client.get("/callback/threads?type=delete")
+        assert response.status_code == 200
+        assert response.json()["message"] == "ok"

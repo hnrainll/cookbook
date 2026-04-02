@@ -41,6 +41,7 @@ Sources                    Core                        Sinks
 - 支持代理访问 Telegram API
 - Threads 长期 token 自动刷新
 - OAuth 回调建议显式带平台参数，例如 `/auth?platform=fanfou`、`/auth?platform=threads`
+- Threads 管理回调使用 `/callback/threads?type=uninstall` 或 `/callback/threads?type=delete`
 
 ## 快速开始
 
@@ -94,6 +95,8 @@ app/
 │   ├── config.py   # Pydantic Settings 配置
 │   ├── auth.py     # AuthService 多平台 OAuth 管理
 │   └── reply.py    # ReplyService 回复路由
+├── routes/
+│   └── auth.py     # 通用 OAuth 回调路由
 ├── schemas/
 │   └── event.py    # UnifiedMessage 统一消息模型
 ├── utils/
@@ -105,7 +108,7 @@ app/
 │   │   ├── telegram/   # Telegram Source + Sink (aiogram polling + 频道转发)
 │   │   ├── fanfou/     # 饭否 Sink (httpx 异步)
 │   │   ├── mastodon/   # Mastodon Sink (httpx 异步)
-│   │   ├── threads/    # Threads Sink + OAuth 2.0
+│   │   ├── threads/    # Threads Sink + OAuth 2.0 + callback
 │   │   └── bluesky/    # Bluesky Sink
 │   └── storage/
 │       └── db.py       # SQLite Sink (aiosqlite)

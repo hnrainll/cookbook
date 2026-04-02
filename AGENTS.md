@@ -37,7 +37,8 @@
 - 配置定义: `app/core/config.py`
 - 统一消息模型: `app/schemas/event.py`
 - 异步事件总线: `app/core/bus.py`
-- 认证路由与回调: `app/services/platforms/feishu/handler.py`
+- 通用认证回调路由: `app/routes/auth.py`
+- Threads callback 路由: `app/services/platforms/threads/handler.py`
 
 ## 核心架构
 
@@ -102,6 +103,7 @@
 - 功能:
   - 发送文本消息到 Threads
   - 处理 Threads OAuth 2.0 授权
+  - 提供 `GET /callback/threads?type=...` 管理回调确认接口
   - callback 后立即把短期 token 换成长期 token
   - 发帖前按刷新窗口自动刷新长期 token
 - 当前限制:
@@ -130,6 +132,12 @@
   - 统一管理平台授权处理器
   - 处理 `/login <platform>` 和 `/logout <platform>` 的后续逻辑
   - OAuth 回调建议显式带 `platform` 参数
+
+- `app/routes/auth.py`
+  - 提供通用 `/auth` OAuth 回调路由
+
+- `app/services/platforms/threads/handler.py`
+  - 提供 `/callback/threads` 轻量确认回调
 
 - `app/core/reply.py`
   - sink 不直接依赖 source
