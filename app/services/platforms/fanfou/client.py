@@ -220,6 +220,9 @@ class FanfouClient:
             return
 
         command = message.command
+        if not command:
+            logger.warning("Received command message without command text")
+            return
         parts = command.split()
         cmd = parts[0]
 

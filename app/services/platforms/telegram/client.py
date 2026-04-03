@@ -303,6 +303,10 @@ class TelegramClient:
     ) -> Optional[dict]:
         """发送消息到 Telegram 频道，返回结果 dict 或 None"""
         try:
+            if self.bot is None:
+                logger.warning("Telegram bot not initialized")
+                return None
+
             channel_id = (
                 self._channel_id if self._channel_id.startswith("@") else int(self._channel_id)
             )

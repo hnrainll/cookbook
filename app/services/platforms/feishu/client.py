@@ -15,7 +15,7 @@ import sys
 import threading
 from collections import OrderedDict
 from pathlib import Path
-from typing import ClassVar, Optional
+from typing import Any, ClassVar, Optional, cast
 
 import lark_oapi as lark
 from lark_oapi.api.im.v1 import (
@@ -78,6 +78,11 @@ class FeishuManager:
         self._dedup = OrderedDictDeduplicator()
         logger.info("FeishuManager initialized")
 
+    def _require_client(self) -> lark.Client:
+        if self.client is None:
+            raise RuntimeError("Feishu client not initialized")
+        return self.client
+
     def send_message(self, open_id: str, text: str) -> CreateMessageResponse:
         """发送消息给用户"""
         content = json.dumps({"text": text})
@@ -93,7 +98,9 @@ class FeishuManager:
             )
             .build()
         )
-        response = self.client.im.v1.message.create(request)
+        client = self._require_client()
+        im_api = cast(Any, client.im)
+        response = im_api.v1.message.create(request)
         return response
 
     def reply_message(self, message_id: str, text: str) -> ReplyMessageResponse:
@@ -107,7 +114,9 @@ class FeishuManager:
             )
             .build()
         )
-        response = self.client.im.v1.message.reply(request)
+        client = self._require_client()
+        im_api = cast(Any, client.im)
+        response = im_api.v1.message.reply(request)
         return response
 
     def get_feishu_image_data(self, message_id: str, file_key: str) -> Optional[bytes]:
@@ -120,9 +129,11 @@ class FeishuManager:
                 .type("image")
                 .build()
             )
-            response: GetMessageResourceResponse = self.client.im.v1.message_resource.get(request)
+            client = self._require_client()
+            im_api = cast(Any, client.im)
+            response: GetMessageResourceResponse = im_api.v1.message_resource.get(request)
 
-            if response.code == 0:
+            if response.code == 0 and response.file:
                 return compress_image_advanced(response.file.read())
             else:
                 logger.error(f"下载飞书图片失败: {response.msg}")
@@ -155,10 +166,25 @@ class FeishuManager:
     def _do_handle_message(self, data: P2ImMessageReceiveV1) -> None:
         """处理飞书消息接收事件（在子线程中执行）"""
         try:
-            open_id = data.event.sender.sender_id.open_id
-            message_type = data.event.message.message_type
-            message_id = data.event.message.message_id
-            chat_id = data.event.message.chat_id
+            event = data.event
+            if event is None or event.sender is None or event.message is None:
+                logger.warning("飞书消息缺少 event/sender/message")
+                return
+
+            sender_id = event.sender.sender_id
+            if sender_id is None or sender_id.open_id is None:
+                logger.warning("飞书消息缺少 sender open_id")
+                return
+
+            message = event.message
+            open_id = sender_id.open_id
+            message_type = message.message_type
+            message_id = message.message_id
+            chat_id = message.chat_id
+
+            if not message_type or not message_id or not chat_id:
+                logger.warning("飞书消息缺少必要字段")
+                return
 
             # 去重
             if self._dedup.exists(message_id):
@@ -181,9 +207,16 @@ class FeishuManager:
         except Exception as e:
             logger.error(f"处理飞书消息异常: {e}", exc_info=True)
 
-    def _handle_text_message(self, data, open_id, message_id, chat_id):
+    def _handle_text_message(
+        self, data: P2ImMessageReceiveV1, open_id: str, message_id: str, chat_id: str
+    ) -> None:
         """处理文本消息"""
-        content = json.loads(data.event.message.content)["text"]
+        event = data.event
+        if event is None or event.message is None or event.message.content is None:
+            logger.warning("飞书文本消息缺少 content")
+            return
+
+        content = json.loads(event.message.content)["text"]
 
         # 检查命令
         if content.startswith("/"):
@@ -209,9 +242,16 @@ class FeishuManager:
         )
         self._publish_to_bus(msg)
 
-    def _handle_image_message(self, data, open_id, message_id, chat_id):
+    def _handle_image_message(
+        self, data: P2ImMessageReceiveV1, open_id: str, message_id: str, chat_id: str
+    ) -> None:
         """处理图片消息"""
-        content = json.loads(data.event.message.content)
+        event = data.event
+        if event is None or event.message is None or event.message.content is None:
+            logger.warning("飞书图片消息缺少 content")
+            return
+
+        content = json.loads(event.message.content)
         image_key = content.get("image_key")
 
         if not image_key:
@@ -239,9 +279,16 @@ class FeishuManager:
         )
         self._publish_to_bus(msg)
 
-    def _handle_post_message(self, data, open_id, message_id, chat_id):
+    def _handle_post_message(
+        self, data: P2ImMessageReceiveV1, open_id: str, message_id: str, chat_id: str
+    ) -> None:
         """处理富文本消息"""
-        content = json.loads(data.event.message.content)
+        event = data.event
+        if event is None or event.message is None or event.message.content is None:
+            logger.warning("飞书富文本消息缺少 content")
+            return
+
+        content = json.loads(event.message.content)
         image_key, text = extract_img_and_first_text_group(content)
 
         if image_key:

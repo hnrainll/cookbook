@@ -156,7 +156,9 @@ class TestFanfouHandleMessage:
         try:
             ReplyService.create_instance()
             replies = []
-            ReplyService.get_instance().register(
+            reply_service = ReplyService.get_instance()
+            assert reply_service is not None
+            reply_service.register(
                 MessageSource.FEISHU,
                 reply_handler=lambda m, t: replies.append(t),
             )
@@ -188,7 +190,9 @@ class TestFanfouHandleMessage:
         try:
             ReplyService.create_instance()
             replies = []
-            ReplyService.get_instance().register(
+            reply_service = ReplyService.get_instance()
+            assert reply_service is not None
+            reply_service.register(
                 MessageSource.FEISHU,
                 reply_handler=lambda m, t: replies.append(t),
             )
@@ -221,7 +225,9 @@ class TestFanfouHandleMessage:
         try:
             ReplyService.create_instance()
             replies = []
-            ReplyService.get_instance().register(
+            reply_service = ReplyService.get_instance()
+            assert reply_service is not None
+            reply_service.register(
                 MessageSource.FEISHU,
                 reply_handler=lambda m, t: replies.append(t),
             )

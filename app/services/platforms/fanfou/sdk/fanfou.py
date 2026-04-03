@@ -1,3 +1,4 @@
+from typing import Any
 from urllib import parse
 
 import httpx
@@ -92,7 +93,7 @@ class Fanfou:
         self.oauth_token_secret = token["oauth_token_secret"][0]
         return {"oauth_token": self.oauth_token, "oauth_token_secret": self.oauth_token_secret}, r
 
-    async def get(self, uri, params=None):
+    async def get(self, uri: str, params: dict[str, Any] | None = None):
         params = params or {}
         url = self.api_endpoint + uri + ".json"
 
@@ -117,7 +118,7 @@ class Fanfou:
             return None, r
         return r.json(), r
 
-    async def post_text(self, uri: str, params: dict = None):
+    async def post_text(self, uri: str, params: dict[str, Any] | None = None):
         params = params or {}
         url = f"{self.api_endpoint}{uri}.json"
 
@@ -138,8 +139,15 @@ class Fanfou:
 
         return r.json(), r
 
-    async def post_photo(self, uri: str, files: dict = None, params: dict = None):
+    async def post_photo(
+        self,
+        uri: str,
+        files: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
+    ):
         url = f"{self.api_endpoint}{uri}.json"
+        params = params or {}
+        files = files or {}
 
         authorization = self.o.gen_authorization(
             {"url": url, "method": "POST", "data": {}}, self.access_oauth_token

@@ -131,12 +131,12 @@ class MastodonClient:
         if not media:
             return None
 
-        data: list[tuple[str, str]] = [
-            ("visibility", self.visibility),
-            ("media_ids[]", str(media["id"])),
-        ]
+        data: dict[str, str] = {
+            "visibility": self.visibility,
+            "media_ids[]": str(media["id"]),
+        }
         if text:
-            data.append(("status", text))
+            data["status"] = text
 
         async with httpx.AsyncClient(timeout=20) as client:
             response = await client.post(

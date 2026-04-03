@@ -4,6 +4,7 @@ import hmac
 import random
 import string
 import time
+from typing import Any
 from urllib import parse
 
 
@@ -30,7 +31,7 @@ def _get_query(args):
     return "&".join(encoded_params)
 
 
-def _get_base_string(request, oauth_data):
+def _get_base_string(request: dict[str, Any], oauth_data: dict[str, str]) -> str:
     query = parse.urlparse(request["url"]).query
 
     params = {}
@@ -49,29 +50,33 @@ def _get_base_string(request, oauth_data):
     return base_string
 
 
-def _get_signing_key(consumer_secret: str, token_secret: str = ""):
+def _get_signing_key(consumer_secret: str, token_secret: str = "") -> str:
     signing_key = f"{_escape(consumer_secret)}&{_escape(token_secret)}"
     return signing_key
 
 
-class OAuth(object):
+class OAuth:
     def __init__(
         self,
         consumer_key,
         consumer_secret,
         parameter_seperator=",",
-    ):
+    ) -> None:
         self.consumer_key = consumer_key
         self.consumer_secret = consumer_secret
         self.parameter_seperator = parameter_seperator
 
-    def gen_authorization(self, request: dict, token: dict = None):
+    def gen_authorization(
+        self, request: dict[str, Any], token: dict[str, str] | None = None
+    ) -> str:
         oauth_data = self._authorize(request, token)
         authorization = self._get_authorization(oauth_data)
 
         return authorization
 
-    def _authorize(self, request: dict, token: dict = None):
+    def _authorize(
+        self, request: dict[str, Any], token: dict[str, str] | None = None
+    ) -> dict[str, str]:
         token = token or {}
 
         oauth_data = {
@@ -95,7 +100,7 @@ class OAuth(object):
         )
         return oauth_data
 
-    def _get_authorization(self, oauth_data) -> str:
+    def _get_authorization(self, oauth_data: dict[str, str]) -> str:
         parts = []
 
         for k, v in sorted(oauth_data.items()):
@@ -104,7 +109,9 @@ class OAuth(object):
 
         return f"OAuth {self.parameter_seperator.join(parts)}"
 
-    def _get_signature(self, request, oauth_data, token_secret):
+    def _get_signature(
+        self, request: dict[str, Any], oauth_data: dict[str, str], token_secret: str
+    ) -> str:
         base_string = _get_base_string(request, oauth_data)
         key_string = _get_signing_key(self.consumer_secret, token_secret)
         return _hmac_sha1_modern(base_string, key_string)

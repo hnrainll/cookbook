@@ -33,7 +33,7 @@ pyright:
 	uv run pyright
 
 # 本地完整检查
-check: format-check lint type test
+check: format-check lint type pyright test
 
 # 安装依赖
 install:

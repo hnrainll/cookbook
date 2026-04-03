@@ -3,7 +3,9 @@ import io
 from PIL import Image
 
 
-def compress_image_advanced(image_bytes, target_size_mb=2, max_dimension=None):
+def compress_image_advanced(
+    image_bytes: bytes, target_size_mb: float = 2, max_dimension: int | None = None
+) -> bytes:
     """
     高级压缩方法，包含更多优化选项
 
@@ -109,7 +111,7 @@ def compress_image_advanced(image_bytes, target_size_mb=2, max_dimension=None):
     return output.getvalue()
 
 
-def _get_compressed_size(img, quality):
+def _get_compressed_size(img: Image.Image, quality: int) -> int:
     output = io.BytesIO()
     img.save(output, format="JPEG", quality=quality, optimize=True)
     return len(output.getvalue())
