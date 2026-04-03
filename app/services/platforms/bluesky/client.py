@@ -3,9 +3,10 @@ Bluesky Platform Sink
 Bluesky 平台消费者 - 接收统一消息并发送到 Bluesky
 """
 
+import asyncio
 import json
 from datetime import UTC, datetime
-from typing import Any, ClassVar, Optional
+from typing import Any, Awaitable, Callable, ClassVar, Optional, TypeVar
 
 import httpx
 from loguru import logger
@@ -25,6 +26,8 @@ BLUESKY_POST_COLLECTION = "app.bsky.feed.post"
 BLUESKY_IMAGE_LIMIT_BYTES = 1_000_000
 BLUESKY_SHARED_SOURCE_PLATFORM = "shared"
 BLUESKY_SHARED_SOURCE_USER_ID = "shared"
+T = TypeVar("T")
+R = TypeVar("R")
 
 
 def _utc_now_iso() -> str:
@@ -52,6 +55,19 @@ def _is_expired_token_response(response: httpx.Response) -> bool:
         return False
 
     return body.get("error") == "ExpiredToken"
+
+
+def _is_transient_upstream_response(response: httpx.Response) -> bool:
+    if response.status_code not in (502, 503, 504):
+        return False
+
+    try:
+        body = response.json()
+    except ValueError:
+        return True
+
+    error = body.get("error")
+    return error in ("UpstreamFailure", "InternalServerError", None)
 
 
 class BlueskyClient:
@@ -164,8 +180,8 @@ class BlueskyClient:
         if not session:
             return None
 
-        blob, session = await self._upload_blob(image_data, session)
-        if not blob:
+        blob, uploaded_session = await self._upload_blob(image_data, session)
+        if not blob or not uploaded_session:
             return None
 
         record = {
@@ -182,7 +198,7 @@ class BlueskyClient:
                 ],
             },
         }
-        return await self._create_record(record, session)
+        return await self._create_record(record, uploaded_session)
 
     async def _get_session(self) -> Optional[dict[str, Any]]:
         if self._session and self._session.get("accessJwt") and self._session.get("did"):
@@ -222,9 +238,13 @@ class BlueskyClient:
             )
 
         if response.is_success:
-            self._session = response.json()
-            await self._save_session_to_db(self._session)
-            return self._session
+            session_payload = response.json()
+            if not isinstance(session_payload, dict):
+                logger.error("Bluesky createSession returned invalid payload type")
+                return None
+            self._session = session_payload
+            await self._save_session_to_db(session_payload)
+            return session_payload
 
         logger.error(
             "Bluesky createSession failed: status_code={} body={}",
@@ -242,9 +262,13 @@ class BlueskyClient:
             )
 
         if response.is_success:
-            self._session = response.json()
-            await self._save_session_to_db(self._session)
-            return self._session
+            session_payload = response.json()
+            if not isinstance(session_payload, dict):
+                logger.error("Bluesky refreshSession returned invalid payload type")
+                return None
+            self._session = session_payload
+            await self._save_session_to_db(session_payload)
+            return session_payload
 
         logger.error(
             "Bluesky refreshSession failed: status_code={} body={}",
@@ -261,61 +285,96 @@ class BlueskyClient:
             "collection": BLUESKY_POST_COLLECTION,
             "record": record,
         }
-        for attempt in range(2):
-            response = await self._post_with_session(
+
+        async def request(current_session: dict[str, Any]) -> httpx.Response:
+            return await self._post_with_session(
                 "/xrpc/com.atproto.repo.createRecord",
-                session,
+                current_session,
                 json=payload,
             )
 
-            if response.is_success:
-                return response.json()
+        async def on_session_refresh(refreshed_session: dict[str, Any]) -> None:
+            payload["repo"] = refreshed_session["did"]
 
-            if attempt == 0 and _is_expired_token_response(response):
-                session = await self._refresh_or_create_session()
-                if session:
-                    payload["repo"] = session["did"]
-                    continue
-
-            logger.error(
-                "Bluesky createRecord failed: status_code={} body={}",
-                response.status_code,
-                response.text,
-            )
-            self._session = None
-            return None
-
-        return None
+        return await self._execute_with_session_retry(
+            operation_name="createRecord",
+            session=session,
+            request=request,
+            extract_success=lambda response, _session: response.json(),
+            on_session_refresh=on_session_refresh,
+            failure_result=None,
+        )
 
     async def _upload_blob(
         self, image_data: bytes, session: dict[str, Any]
     ) -> tuple[Optional[dict], Optional[dict[str, Any]]]:
-        for attempt in range(2):
-            response = await self._post_with_session(
+        async def request(current_session: dict[str, Any]) -> httpx.Response:
+            return await self._post_with_session(
                 "/xrpc/com.atproto.repo.uploadBlob",
-                session,
+                current_session,
                 content=image_data,
                 content_type="image/jpeg",
                 timeout=30,
             )
 
+        return await self._execute_with_session_retry(
+            operation_name="uploadBlob",
+            session=session,
+            request=request,
+            extract_success=lambda response, current_session: (
+                response.json().get("blob"),
+                current_session,
+            ),
+            failure_result=(None, None),
+        )
+
+    async def _execute_with_session_retry(
+        self,
+        *,
+        operation_name: str,
+        session: dict[str, Any],
+        request: Callable[[dict[str, Any]], Awaitable[httpx.Response]],
+        extract_success: Callable[[httpx.Response, dict[str, Any]], R],
+        failure_result: R,
+        on_session_refresh: Optional[Callable[[dict[str, Any]], Awaitable[None]]] = None,
+    ) -> R:
+        current_session: dict[str, Any] = session
+        for attempt in range(3):
+            response = await request(current_session)
+
             if response.is_success:
-                return response.json().get("blob"), session
+                return extract_success(response, current_session)
 
             if attempt == 0 and _is_expired_token_response(response):
-                session = await self._refresh_or_create_session()
-                if session:
+                refreshed_session = await self._refresh_or_create_session()
+                if refreshed_session:
+                    current_session = refreshed_session
+                    if on_session_refresh:
+                        await on_session_refresh(current_session)
                     continue
 
+            if attempt < 2 and _is_transient_upstream_response(response):
+                logger.warning(
+                    "Bluesky {} transient failure: status_code={} body={} retry={}",
+                    operation_name,
+                    response.status_code,
+                    response.text,
+                    attempt + 1,
+                )
+                await asyncio.sleep(0.5 * (attempt + 1))
+                continue
+
             logger.error(
-                "Bluesky uploadBlob failed: status_code={} body={}",
+                "Bluesky {} failed: status_code={} body={}",
+                operation_name,
                 response.status_code,
                 response.text,
             )
-            self._session = None
-            return None, None
+            if _is_expired_token_response(response):
+                self._session = None
+            return failure_result
 
-        return None, None
+        return failure_result
 
     async def _post_with_session(
         self,

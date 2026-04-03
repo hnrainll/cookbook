@@ -1,14 +1,13 @@
 {
-  "python.languageServer": "Pylance",
-  "ty.disableLanguageServices": true,
-  "[python]": {
-    "editor.defaultFormatter": "charliermarsh.ruff"
-  },
-  "editor.formatOnSave": true,
-  "editor.codeActionsOnSave": {
-    "source.fixAll.ruff": "explicit",
-    "source.organizeImports.ruff": "explicit"
-  },
-  "ruff.nativeServer": "on",
-  "ruff.configurationPreference": "filesystemFirst"
+    "python.languageServer": "Pylance",
+    "python.analysis.typeCheckingMode": "basic",
+    "ty.disableLanguageServices": true,
+    "[python]": {"editor.defaultFormatter": "charliermarsh.ruff"},
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+        "source.fixAll.ruff": "explicit",
+        "source.organizeImports.ruff": "explicit",
+    },
+    "ruff.nativeServer": "on",
+    "ruff.configurationPreference": "filesystemFirst",
 }

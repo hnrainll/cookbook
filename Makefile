@@ -1,4 +1,4 @@
-.PHONY: run dev test install format format-check lint type check
+.PHONY: run dev test install format format-check lint type pyright check
 
 # 启动服务
 run:
@@ -27,6 +27,10 @@ lint:
 # 类型检查
 type:
 	uv run ty check
+
+# Pyright 类型检查
+pyright:
+	uv run pyright
 
 # 本地完整检查
 check: format-check lint type test

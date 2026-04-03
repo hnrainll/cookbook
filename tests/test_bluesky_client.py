@@ -67,6 +67,86 @@ class MockResponse:
 
 
 class TestBlueskyClient:
+    def test_post_text_retries_transient_upstream_failure(self):
+        loop = asyncio.new_event_loop()
+        try:
+            client = BlueskyClient()
+            client._session = {
+                "did": "did:plc:test",
+                "accessJwt": "jwt",
+                "handle": "tester.bsky.social",
+            }
+
+            with patch("httpx.AsyncClient.post") as mock_post:
+                mock_post.side_effect = [
+                    MockResponse(
+                        502,
+                        {
+                            "error": "UpstreamFailure",
+                            "message": "UpstreamFailure",
+                        },
+                    ),
+                    MockResponse(
+                        200,
+                        {
+                            "uri": "at://did:plc:test/app.bsky.feed.post/abc123",
+                            "cid": "bafy123",
+                        },
+                    ),
+                ]
+
+                result = loop.run_until_complete(client.post_text("hello"))
+
+            assert result is not None
+            assert result["cid"] == "bafy123"
+            assert client._session is not None
+            assert mock_post.call_count == 2
+        finally:
+            loop.close()
+
+    def test_post_text_keeps_session_on_transient_upstream_failure(self):
+        loop = asyncio.new_event_loop()
+        try:
+            client = BlueskyClient()
+            client._session = {
+                "did": "did:plc:test",
+                "accessJwt": "jwt",
+                "handle": "tester.bsky.social",
+            }
+
+            with patch("httpx.AsyncClient.post") as mock_post:
+                mock_post.side_effect = [
+                    MockResponse(
+                        502,
+                        {
+                            "error": "UpstreamFailure",
+                            "message": "UpstreamFailure",
+                        },
+                    ),
+                    MockResponse(
+                        502,
+                        {
+                            "error": "UpstreamFailure",
+                            "message": "UpstreamFailure",
+                        },
+                    ),
+                    MockResponse(
+                        502,
+                        {
+                            "error": "UpstreamFailure",
+                            "message": "UpstreamFailure",
+                        },
+                    ),
+                ]
+
+                result = loop.run_until_complete(client.post_text("hello"))
+
+            assert result is None
+            assert client._session is not None
+            assert mock_post.call_count == 3
+        finally:
+            loop.close()
+
     def test_start_loads_persisted_session(self, db_manager):
         mgr, loop = db_manager
         loop.run_until_complete(
