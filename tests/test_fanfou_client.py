@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.core.auth import AuthService
+from app.core.bus import bus
 from app.core.reply import ReplyService
 from app.schemas.event import MessageSource, UnifiedMessage
 from app.services.platforms.fanfou.client import FanfouClient
@@ -129,8 +130,6 @@ class TestFanfouHandleMessage:
                 reply_handler=lambda m, t: replies.append(t),
             )
 
-            from app.core.bus import bus
-
             bus.clear_handlers()
 
             client = FanfouClient()
@@ -162,8 +161,6 @@ class TestFanfouHandleMessage:
                 MessageSource.FEISHU,
                 reply_handler=lambda m, t: replies.append(t),
             )
-
-            from app.core.bus import bus
 
             bus.clear_handlers()
 
@@ -197,8 +194,6 @@ class TestFanfouHandleMessage:
                 reply_handler=lambda m, t: replies.append(t),
             )
 
-            from app.core.bus import bus
-
             bus.clear_handlers()
 
             client = FanfouClient()
@@ -231,8 +226,6 @@ class TestFanfouHandleMessage:
                 MessageSource.FEISHU,
                 reply_handler=lambda m, t: replies.append(t),
             )
-
-            from app.core.bus import bus
 
             bus.clear_handlers()
 

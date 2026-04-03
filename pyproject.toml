@@ -36,6 +36,12 @@ dev = [
     "ty>=0.0.26",
 ]
 
+[tool.pyright]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
+include = ["app", "tests"]
+exclude = [".git", ".idea", ".venv", "__pycache__", "data", "logs"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"

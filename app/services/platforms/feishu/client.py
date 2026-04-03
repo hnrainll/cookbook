@@ -341,6 +341,7 @@ class FeishuManager:
 
     def _run_in_thread(self) -> None:
         """在独立线程中运行 lark.ws.Client WebSocket 长连接"""
+        feishu_loop: asyncio.AbstractEventLoop | None = None
         try:
             # 创建子线程的 event loop
             feishu_loop = asyncio.new_event_loop()
@@ -383,7 +384,8 @@ class FeishuManager:
         except Exception as e:
             logger.exception(f"飞书 WebSocket 客户端错误: {e}")
         finally:
-            feishu_loop.close()
+            if feishu_loop is not None:
+                feishu_loop.close()
 
     def start(self) -> None:
         """启动飞书客户端（在独立线程中）"""

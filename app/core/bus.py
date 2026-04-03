@@ -126,8 +126,8 @@ class EventBus:
         Returns:
             处理器的返回值，或抛出异常
         """
+        handler_name = _handler_name(handler)
         try:
-            handler_name = _handler_name(handler)
             logger.debug(f"Handler {handler_name} processing message {message.event_id}")
             result = await handler(message)
             logger.debug(f"Handler {handler_name} completed for message {message.event_id}")
