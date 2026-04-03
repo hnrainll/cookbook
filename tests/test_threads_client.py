@@ -225,6 +225,79 @@ class TestThreadsAuthHandler:
 
 
 class TestThreadsClient:
+    def test_post_text_fetches_permalink_when_available(self):
+        loop = asyncio.new_event_loop()
+        try:
+            client = ThreadsClient()
+
+            with (
+                patch.object(
+                    client,
+                    "get_valid_token",
+                    AsyncMock(return_value={"access_token": "token"}),
+                ),
+                patch.object(
+                    client,
+                    "create_text_container",
+                    AsyncMock(return_value="container123"),
+                ),
+                patch.object(
+                    client,
+                    "publish_container",
+                    AsyncMock(return_value={"id": "post123"}),
+                ),
+                patch.object(
+                    client,
+                    "get_post_permalink",
+                    AsyncMock(return_value="https://www.threads.com/@user/post/abc"),
+                ),
+            ):
+                result = loop.run_until_complete(client.post_text("hello"))
+
+            assert result == {
+                "id": "post123",
+                "creation_id": "container123",
+                "permalink": "https://www.threads.com/@user/post/abc",
+            }
+        finally:
+            loop.close()
+
+    def test_post_text_keeps_success_when_permalink_fetch_fails(self):
+        loop = asyncio.new_event_loop()
+        try:
+            client = ThreadsClient()
+
+            with (
+                patch.object(
+                    client,
+                    "get_valid_token",
+                    AsyncMock(return_value={"access_token": "token"}),
+                ),
+                patch.object(
+                    client,
+                    "create_text_container",
+                    AsyncMock(return_value="container123"),
+                ),
+                patch.object(
+                    client,
+                    "publish_container",
+                    AsyncMock(return_value={"id": "post123"}),
+                ),
+                patch.object(
+                    client,
+                    "get_post_permalink",
+                    AsyncMock(return_value=None),
+                ),
+            ):
+                result = loop.run_until_complete(client.post_text("hello"))
+
+            assert result == {
+                "id": "post123",
+                "creation_id": "container123",
+            }
+        finally:
+            loop.close()
+
     def test_refresh_access_token_uses_access_token_param(self):
         loop = asyncio.new_event_loop()
         try:
@@ -331,6 +404,18 @@ class TestThreadsClient:
 
         row = loop.run_until_complete(fetch_row())
         assert row == ("threads", "post123", 1)
+
+    def test_success_text_prefers_permalink(self):
+        client = ThreadsClient()
+
+        text = client._success_text(
+            {
+                "id": "post123",
+                "permalink": "https://www.threads.com/@user/post/abc",
+            }
+        )
+
+        assert text == "[Threads] 消息发送成功\n\nhttps://www.threads.com/@user/post/abc"
 
     def test_handle_image_is_skipped(self, db_manager):
         _mgr, loop = db_manager

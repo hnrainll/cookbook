@@ -231,6 +231,11 @@ class ThreadsClient:
         publish_response = await self.publish_container(creation_id, token_payload["access_token"])
         if publish_response:
             publish_response.setdefault("creation_id", creation_id)
+            post_id = publish_response.get("id")
+            if post_id:
+                permalink = await self.get_post_permalink(post_id, token_payload["access_token"])
+                if permalink:
+                    publish_response["permalink"] = permalink
         return publish_response
 
     async def create_text_container(self, text: str, access_token: str) -> Optional[str]:
@@ -282,6 +287,27 @@ class ThreadsClient:
 
         logger.error(
             "Threads publish failed: status_code={} body={}",
+            response.status_code,
+            response.text,
+        )
+        return None
+
+    async def get_post_permalink(self, post_id: str, access_token: str) -> Optional[str]:
+        headers = {"Authorization": f"Bearer {access_token}"}
+        params = {"fields": "id,permalink"}
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.get(
+                f"{self.base_url}/{post_id}",
+                params=params,
+                headers=headers,
+            )
+
+        if response.is_success:
+            return response.json().get("permalink")
+
+        logger.warning(
+            "Threads get permalink failed: post_id={} status_code={} body={}",
+            post_id,
             response.status_code,
             response.text,
         )
@@ -390,6 +416,10 @@ class ThreadsClient:
         }
 
     def _success_text(self, response_data: dict) -> str:
+        permalink = response_data.get("permalink")
+        if permalink:
+            return f"[Threads] 消息发送成功\n\n{permalink}"
+
         post_id = response_data.get("id")
         if post_id:
             return f"[Threads] 消息发送成功\n\nPost ID: {post_id}"
@@ -429,7 +459,7 @@ class ThreadsClient:
                 event_id=str(message.event_id),
                 sink_platform="threads",
                 status_id=post_id,
-                status_url=None,
+                status_url=ret.get("permalink"),
                 response_data=json.dumps(ret, ensure_ascii=False),
                 success=True,
             )
