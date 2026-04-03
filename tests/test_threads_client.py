@@ -490,6 +490,34 @@ class TestThreadsClient:
         finally:
             loop.close()
 
+    def test_publish_container_retries_when_container_is_not_ready(self):
+        loop = asyncio.new_event_loop()
+        try:
+            client = ThreadsClient()
+            first_response = MockResponse(
+                400,
+                {
+                    "error": {
+                        "message": "The requested resource does not exist",
+                        "type": "OAuthException",
+                        "code": 24,
+                        "error_subcode": 4279009,
+                    }
+                },
+            )
+            second_response = MockResponse(200, {"id": "post456"})
+
+            with (
+                patch("httpx.AsyncClient.post", side_effect=[first_response, second_response]),
+                patch("asyncio.sleep", AsyncMock()) as mock_sleep,
+            ):
+                result = loop.run_until_complete(client.publish_container("container", "token"))
+
+            assert result == {"id": "post456"}
+            mock_sleep.assert_awaited_once_with(1.0)
+        finally:
+            loop.close()
+
 
 def _utc_now() -> datetime:
     return datetime.now(UTC)

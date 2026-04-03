@@ -1,4 +1,4 @@
-.PHONY: run dev test install format format-check lint type pyright check
+.PHONY: run dev test install install-hooks format format-check lint type pyright check
 
 # 启动服务
 run:
@@ -38,3 +38,7 @@ check: format-check lint type pyright test
 # 安装依赖
 install:
 	uv sync
+
+# 启用仓库内的 git hooks
+install-hooks:
+	git config core.hooksPath .githooks

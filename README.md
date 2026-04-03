@@ -49,6 +49,9 @@ Sources                    Core                        Sinks
 # 安装依赖
 make install
 
+# 启用 git hooks（提交前自动执行 make check）
+make install-hooks
+
 # 代码格式化
 make format
 
@@ -85,6 +88,7 @@ make test
 
 - `ruff`：代码格式化和 lint
 - `ty`：类型检查
+- Git pre-commit hook：提交前自动执行 `make check`
 
 ## 目录结构
 

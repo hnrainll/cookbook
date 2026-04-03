@@ -3,6 +3,7 @@ Threads Platform Sink
 Threads 平台消费者 - 接收统一消息并发送到 Threads
 """
 
+import asyncio
 import json
 from datetime import UTC, datetime, timedelta
 from typing import ClassVar, Optional
@@ -170,6 +171,7 @@ class ThreadsClient:
     """Threads 客户端，只处理文本 sink。"""
 
     _instance: ClassVar[Optional["ThreadsClient"]] = None
+    _publish_retry_delays: ClassVar[tuple[float, ...]] = (1.0, 2.0)
 
     def __init__(self):
         self.base_url = settings.threads_base_url.rstrip("/")
@@ -261,13 +263,12 @@ class ThreadsClient:
 
     async def publish_container(self, creation_id: str, access_token: str) -> Optional[dict]:
         headers = {"Authorization": f"Bearer {access_token}"}
-        async with httpx.AsyncClient(timeout=20) as client:
-            response = await client.post(
-                f"{self.base_url}/me/threads_publish",
-                params={"creation_id": creation_id},
-                headers=headers,
-            )
+        response = await self._publish_request(creation_id, headers)
 
+        if response.is_success:
+            return response.json()
+
+        response = await self._retry_publish_if_container_not_ready(creation_id, headers, response)
         if response.is_success:
             return response.json()
 
@@ -275,22 +276,64 @@ class ThreadsClient:
             refreshed = await self.refresh_and_get_token()
             if refreshed:
                 retry_headers = {"Authorization": f"Bearer {refreshed['access_token']}"}
-                async with httpx.AsyncClient(timeout=20) as client:
-                    retry_response = await client.post(
-                        f"{self.base_url}/me/threads_publish",
-                        params={"creation_id": creation_id},
-                        headers=retry_headers,
-                    )
+                retry_response = await self._publish_request(creation_id, retry_headers)
+                retry_response = await self._retry_publish_if_container_not_ready(
+                    creation_id, retry_headers, retry_response
+                )
                 if retry_response.is_success:
                     return retry_response.json()
                 response = retry_response
 
         logger.error(
-            "Threads publish failed: status_code={} body={}",
+            "Threads publish failed: creation_id={} status_code={} body={}",
+            creation_id,
             response.status_code,
             response.text,
         )
         return None
+
+    async def _publish_request(self, creation_id: str, headers: dict[str, str]) -> httpx.Response:
+        async with httpx.AsyncClient(timeout=20) as client:
+            return await client.post(
+                f"{self.base_url}/me/threads_publish",
+                params={"creation_id": creation_id},
+                headers=headers,
+            )
+
+    async def _retry_publish_if_container_not_ready(
+        self,
+        creation_id: str,
+        headers: dict[str, str],
+        response: httpx.Response,
+    ) -> httpx.Response:
+        if not self._is_publish_container_not_ready(response):
+            return response
+
+        current_response = response
+        for retry_index, delay in enumerate(self._publish_retry_delays):
+            logger.warning(
+                "Threads container not ready for publish yet: "
+                "creation_id={} status_code={} retry_attempt={} retry_in={}s body={}",
+                creation_id,
+                current_response.status_code,
+                retry_index + 1,
+                delay,
+                current_response.text,
+            )
+            await asyncio.sleep(delay)
+            current_response = await self._publish_request(creation_id, headers)
+            if current_response.is_success or not self._is_publish_container_not_ready(
+                current_response
+            ):
+                return current_response
+        return current_response
+
+    def _is_publish_container_not_ready(self, response: httpx.Response) -> bool:
+        try:
+            error = response.json().get("error", {})
+        except ValueError:
+            return False
+        return error.get("code") == 24 and error.get("error_subcode") == 4279009
 
     async def get_post_permalink(self, post_id: str, access_token: str) -> Optional[str]:
         headers = {"Authorization": f"Bearer {access_token}"}
