@@ -21,6 +21,7 @@ from app.services.platforms.limits import (
     text_too_long_error,
     text_too_long_reply,
 )
+from app.utils.image import compress_image_advanced
 
 BLUESKY_POST_COLLECTION = "app.bsky.feed.post"
 BLUESKY_IMAGE_LIMIT_BYTES = 1_000_000
@@ -168,19 +169,15 @@ class BlueskyClient:
         return await self._create_record(record, session)
 
     async def post_image(self, image_data: bytes, text: Optional[str] = None) -> Optional[dict]:
-        if len(image_data) > BLUESKY_IMAGE_LIMIT_BYTES:
-            logger.error(
-                "Bluesky image too large: {} bytes, max {} bytes",
-                len(image_data),
-                BLUESKY_IMAGE_LIMIT_BYTES,
-            )
+        upload_image_data = self._fit_image_for_upload(image_data)
+        if not upload_image_data:
             return None
 
         session = await self._get_session()
         if not session:
             return None
 
-        blob, uploaded_session = await self._upload_blob(image_data, session)
+        blob, uploaded_session = await self._upload_blob(upload_image_data, session)
         if not blob or not uploaded_session:
             return None
 
@@ -199,6 +196,38 @@ class BlueskyClient:
             },
         }
         return await self._create_record(record, uploaded_session)
+
+    def _fit_image_for_upload(self, image_data: bytes) -> Optional[bytes]:
+        if len(image_data) <= BLUESKY_IMAGE_LIMIT_BYTES:
+            return image_data
+
+        try:
+            compressed = compress_image_advanced(
+                image_data,
+                target_size_mb=BLUESKY_IMAGE_LIMIT_BYTES / 1024 / 1024,
+            )
+        except Exception as e:
+            logger.error(
+                "Bluesky image compression failed: original_size={} error={}",
+                len(image_data),
+                e,
+            )
+            return None
+
+        if len(compressed) > BLUESKY_IMAGE_LIMIT_BYTES:
+            logger.error(
+                "Bluesky image too large after compression: {} bytes, max {} bytes",
+                len(compressed),
+                BLUESKY_IMAGE_LIMIT_BYTES,
+            )
+            return None
+
+        logger.info(
+            "Bluesky image compressed: {} bytes -> {} bytes",
+            len(image_data),
+            len(compressed),
+        )
+        return compressed
 
     async def _get_session(self) -> Optional[dict[str, Any]]:
         if self._session and self._session.get("accessJwt") and self._session.get("did"):

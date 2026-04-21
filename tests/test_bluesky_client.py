@@ -430,6 +430,50 @@ class TestBlueskyClient:
         finally:
             loop.close()
 
+    def test_post_image_compresses_large_image_before_upload(self):
+        loop = asyncio.new_event_loop()
+        try:
+            client = BlueskyClient()
+            session = {
+                "did": "did:plc:test",
+                "accessJwt": "jwt",
+                "handle": "tester.bsky.social",
+            }
+            client._session = session
+            payload = b"x" * (BLUESKY_IMAGE_LIMIT_BYTES + 1)
+            compressed = b"compressed-image"
+
+            with (
+                patch(
+                    "app.services.platforms.bluesky.client.compress_image_advanced",
+                    return_value=compressed,
+                ) as mock_compress,
+                patch.object(
+                    client,
+                    "_upload_blob",
+                    AsyncMock(return_value=({"ref": {"$link": "blob"}}, session)),
+                ) as mock_upload_blob,
+                patch.object(
+                    client,
+                    "_create_record",
+                    AsyncMock(
+                        return_value={
+                            "uri": "at://did:plc:test/app.bsky.feed.post/abc123",
+                            "cid": "bafy123",
+                        }
+                    ),
+                ),
+            ):
+                result = loop.run_until_complete(client.post_image(payload, "caption"))
+
+            assert result is not None
+            assert result["cid"] == "bafy123"
+            mock_compress.assert_called_once()
+            assert mock_upload_blob.await_args is not None
+            assert mock_upload_blob.await_args.args[0] == compressed
+        finally:
+            loop.close()
+
     def test_post_image_refreshes_expired_token_during_upload(self):
         loop = asyncio.new_event_loop()
         try:
