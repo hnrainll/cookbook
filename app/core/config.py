@@ -26,6 +26,10 @@ class Settings(BaseSettings):
         default="privacy@example.com",
         description="公开页面使用的联系邮箱",
     )
+    public_base_url: str = Field(
+        default="",
+        description="服务公网基础 URL，用于生成第三方平台可访问的媒体链接",
+    )
 
     # ===== 飞书配置 =====
     feishu_enabled: bool = Field(default=False, description="是否启用飞书集成")

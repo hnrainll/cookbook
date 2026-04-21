@@ -4,9 +4,13 @@ Threads 平台消费者 - 接收统一消息并发送到 Threads
 """
 
 import asyncio
+import ipaddress
 import json
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import ClassVar, Optional
+from pathlib import Path
+from typing import Awaitable, Callable, ClassVar, Optional
+from urllib.parse import urlparse
 from uuid import uuid4
 
 import httpx
@@ -17,12 +21,28 @@ from app.core.config import settings
 from app.schemas.event import UnifiedMessage
 from app.services.platforms.limits import (
     THREADS_TEXT_LIMIT,
+    caption_too_long_error,
+    caption_too_long_reply,
     text_too_long_error,
     text_too_long_reply,
 )
 
 THREADS_SCOPES = "threads_basic,threads_content_publish"
 THREADS_AUTHORIZE_URL = "https://threads.net/oauth/authorize"
+THREADS_ALT_TEXT_LIMIT = 1_000
+THREADS_CONTAINER_FINISHED_STATUS = "FINISHED"
+THREADS_CONTAINER_ERROR_STATUSES = {"ERROR", "EXPIRED"}
+THREADS_TRANSIENT_STATUS_CODES = {502, 503, 504}
+
+
+@dataclass(frozen=True)
+class ThreadsPostResult:
+    response: Optional[dict] = None
+    error_message: Optional[str] = None
+
+    @property
+    def success(self) -> bool:
+        return self.response is not None
 
 
 def _utc_now() -> datetime:
@@ -168,10 +188,12 @@ class ThreadsAuthHandler:
 
 
 class ThreadsClient:
-    """Threads 客户端，只处理文本 sink。"""
+    """Threads 客户端，支持文本和单图 sink。"""
 
     _instance: ClassVar[Optional["ThreadsClient"]] = None
     _publish_retry_delays: ClassVar[tuple[float, ...]] = (1.0, 2.0)
+    _container_status_retry_delays: ClassVar[tuple[float, ...]] = (1.0, 2.0, 4.0)
+    _request_retry_delays: ClassVar[tuple[float, ...]] = (0.5, 1.0)
 
     def __init__(self):
         self.base_url = settings.threads_base_url.rstrip("/")
@@ -192,7 +214,7 @@ class ThreadsClient:
             if message.message_type == "text":
                 await self._handle_text(message)
             elif message.message_type in ("image", "post"):
-                logger.debug("Threads: skipping non-text message {}", message.event_id)
+                await self._handle_image(message)
             else:
                 logger.debug(f"Threads: skipping message type '{message.message_type}'")
         except Exception as e:
@@ -203,6 +225,13 @@ class ThreadsClient:
         from app.core.reply import ReplyService
 
         reply_service = ReplyService.get_instance()
+        if not message.content.strip():
+            error_message = "消息内容为空，无法发送"
+            if reply_service:
+                reply_service.reply(message, f"[Threads] {error_message}")
+            await self._save_sink_result(message, None, error_message)
+            return
+
         if len(message.content) > THREADS_TEXT_LIMIT.default_limit:
             if reply_service:
                 reply_service.reply(message, text_too_long_reply(THREADS_TEXT_LIMIT))
@@ -213,29 +242,125 @@ class ThreadsClient:
             )
             return
 
-        ret = await self.post_text(message.content)
+        result = await self.try_post_text(message.content)
+        if result.success:
+            await self._save_sink_result(message, result.response)
+            if reply_service:
+                reply_service.reply(message, self._success_text(result.response or {}))
+            return
+
+        await self._save_sink_result(
+            message,
+            None,
+            result.error_message or "发送到 Threads 失败",
+        )
+        if reply_service and result.error_message:
+            reply_service.reply(message, f"[Threads] {result.error_message}")
+        elif reply_service:
+            reply_service.reply(message, "[Threads] 消息发送失败")
+
+    async def _handle_image(self, message: UnifiedMessage) -> None:
+        from app.core.reply import ReplyService
+
+        reply_service = ReplyService.get_instance()
+        if message.content and len(message.content) > THREADS_TEXT_LIMIT.default_limit:
+            if reply_service:
+                reply_service.reply(message, caption_too_long_reply(THREADS_TEXT_LIMIT))
+            await self._save_sink_result(
+                message,
+                None,
+                caption_too_long_error(THREADS_TEXT_LIMIT),
+            )
+            return
+
+        image_url = self._image_url_for_message(message)
+        if not image_url:
+            error_message = "图片发送失败：缺少可公开访问的图片 URL"
+            if reply_service:
+                reply_service.reply(message, f"[Threads] {error_message}")
+            await self._save_sink_result(message, None, error_message)
+            return
+
+        ret = await self.post_image(image_url, message.content or None)
         await self._save_sink_result(message, ret)
 
         if reply_service and ret:
             reply_service.reply(message, self._success_text(ret))
         elif reply_service:
-            reply_service.reply(message, "[Threads] 消息发送失败")
+            reply_service.reply(message, "[Threads] 图片发送失败")
 
     async def post_text(self, text: str) -> Optional[dict]:
+        result = await self.try_post_text(text)
+        return result.response
+
+    async def try_post_text(self, text: str) -> ThreadsPostResult:
         token_payload = await self.get_valid_token()
         if not token_payload:
-            return None
+            return ThreadsPostResult(error_message="未授权或 token 不可用")
 
         creation_id = await self.create_text_container(text, token_payload["access_token"])
         if not creation_id:
-            return None
+            return ThreadsPostResult(error_message="文本容器创建失败")
+
+        ready = await self.wait_for_container_ready(creation_id, token_payload["access_token"])
+        if not ready:
+            return ThreadsPostResult(error_message="文本容器未完成处理")
 
         publish_response = await self.publish_container(creation_id, token_payload["access_token"])
+        if not publish_response:
+            return ThreadsPostResult(error_message="文本发布失败")
+
+        enriched_response = await self._enrich_publish_response(
+            publish_response, creation_id, token_payload["access_token"]
+        )
+        return ThreadsPostResult(response=enriched_response)
+
+    async def post_image(self, image_url: str, text: Optional[str] = None) -> Optional[dict]:
+        result = await self.try_post_image(image_url, text)
+        return result.response
+
+    async def try_post_image(
+        self,
+        image_url: str,
+        text: Optional[str] = None,
+    ) -> ThreadsPostResult:
+        token_payload = await self.get_valid_token()
+        if not token_payload:
+            return ThreadsPostResult(error_message="未授权或 token 不可用")
+
+        creation_id = await self.create_image_container(
+            image_url,
+            token_payload["access_token"],
+            text,
+            alt_text=text,
+        )
+        if not creation_id:
+            return ThreadsPostResult(error_message="图片容器创建失败")
+
+        ready = await self.wait_for_container_ready(creation_id, token_payload["access_token"])
+        if not ready:
+            return ThreadsPostResult(error_message="图片容器未完成处理")
+
+        publish_response = await self.publish_container(creation_id, token_payload["access_token"])
+        if not publish_response:
+            return ThreadsPostResult(error_message="图片发布失败")
+
+        enriched_response = await self._enrich_publish_response(
+            publish_response, creation_id, token_payload["access_token"]
+        )
+        return ThreadsPostResult(response=enriched_response)
+
+    async def _enrich_publish_response(
+        self,
+        publish_response: Optional[dict],
+        creation_id: str,
+        access_token: str,
+    ) -> Optional[dict]:
         if publish_response:
             publish_response.setdefault("creation_id", creation_id)
             post_id = publish_response.get("id")
             if post_id:
-                permalink = await self.get_post_permalink(post_id, token_payload["access_token"])
+                permalink = await self.get_post_permalink(post_id, access_token)
                 if permalink:
                     publish_response["permalink"] = permalink
         return publish_response
@@ -243,12 +368,18 @@ class ThreadsClient:
     async def create_text_container(self, text: str, access_token: str) -> Optional[str]:
         data = {"media_type": "TEXT", "text": text}
         headers = {"Authorization": f"Bearer {access_token}"}
-        async with httpx.AsyncClient(timeout=20) as client:
-            response = await client.post(
-                f"{self.base_url}/me/threads",
-                data=data,
-                headers=headers,
-            )
+
+        async def request() -> httpx.Response:
+            async with httpx.AsyncClient(timeout=20) as client:
+                return await client.post(
+                    f"{self.base_url}/me/threads",
+                    data=data,
+                    headers=headers,
+                )
+
+        response = await self._request_with_retry("create text container", request)
+        if not response:
+            return None
 
         if response.is_success:
             payload = response.json()
@@ -260,6 +391,171 @@ class ThreadsClient:
             response.text,
         )
         return None
+
+    async def _request_with_retry(
+        self,
+        operation_name: str,
+        request: Callable[[], Awaitable[httpx.Response]],
+    ) -> Optional[httpx.Response]:
+        for attempt, delay in enumerate((0.0, *self._request_retry_delays)):
+            if delay:
+                await asyncio.sleep(delay)
+
+            try:
+                response = await request()
+            except httpx.TimeoutException as e:
+                logger.warning(
+                    "Threads {} timed out: attempt={} error={}",
+                    operation_name,
+                    attempt + 1,
+                    e,
+                )
+                if attempt < len(self._request_retry_delays):
+                    continue
+                return None
+
+            if response.status_code in THREADS_TRANSIENT_STATUS_CODES:
+                logger.warning(
+                    "Threads {} transient failure: status_code={} attempt={} body={}",
+                    operation_name,
+                    response.status_code,
+                    attempt + 1,
+                    response.text,
+                )
+                if attempt < len(self._request_retry_delays):
+                    continue
+
+            return response
+
+        return None
+
+    async def create_image_container(
+        self,
+        image_url: str,
+        access_token: str,
+        text: Optional[str] = None,
+        alt_text: Optional[str] = None,
+    ) -> Optional[str]:
+        data = {"media_type": "IMAGE", "image_url": image_url}
+        if text:
+            data["text"] = text
+        if alt_text:
+            data["alt_text"] = alt_text[:THREADS_ALT_TEXT_LIMIT]
+
+        headers = {"Authorization": f"Bearer {access_token}"}
+
+        async def request() -> httpx.Response:
+            async with httpx.AsyncClient(timeout=20) as client:
+                return await client.post(
+                    f"{self.base_url}/me/threads",
+                    data=data,
+                    headers=headers,
+                )
+
+        response = await self._request_with_retry("create image container", request)
+        if not response:
+            return None
+
+        if response.is_success:
+            payload = response.json()
+            return payload.get("id")
+
+        logger.error(
+            "Threads create image container failed: status_code={} body={}",
+            response.status_code,
+            response.text,
+        )
+        return None
+
+    async def wait_for_container_ready(self, creation_id: str, access_token: str) -> bool:
+        for attempt, delay in enumerate((0.0, *self._container_status_retry_delays)):
+            if delay:
+                await asyncio.sleep(delay)
+
+            status_payload = await self.get_container_status(creation_id, access_token)
+            if not status_payload:
+                return False
+
+            status = status_payload.get("status")
+            if status == THREADS_CONTAINER_FINISHED_STATUS:
+                return True
+
+            if status in THREADS_CONTAINER_ERROR_STATUSES:
+                logger.error(
+                    "Threads container processing failed: creation_id={} status={} error={}",
+                    creation_id,
+                    status,
+                    status_payload.get("error_message"),
+                )
+                return False
+
+            logger.debug(
+                "Threads container not ready: creation_id={} status={} attempt={}",
+                creation_id,
+                status,
+                attempt + 1,
+            )
+
+        logger.error("Threads container did not become ready: creation_id={}", creation_id)
+        return False
+
+    async def get_container_status(
+        self,
+        creation_id: str,
+        access_token: str,
+    ) -> Optional[dict]:
+        headers = {"Authorization": f"Bearer {access_token}"}
+        params = {"fields": "id,status,error_message"}
+
+        async def request() -> httpx.Response:
+            async with httpx.AsyncClient(timeout=20) as client:
+                return await client.get(
+                    f"{self.base_url}/{creation_id}",
+                    params=params,
+                    headers=headers,
+                )
+
+        response = await self._request_with_retry("get container status", request)
+        if not response:
+            return None
+
+        if response.is_success:
+            return response.json()
+
+        logger.error(
+            "Threads get container status failed: creation_id={} status_code={} body={}",
+            creation_id,
+            response.status_code,
+            response.text,
+        )
+        return None
+
+    def _image_url_for_message(self, message: UnifiedMessage) -> Optional[str]:
+        public_base_url = settings.public_base_url.rstrip("/")
+        if not message.image_path or not self._is_public_https_url(public_base_url):
+            return None
+
+        filename = Path(message.image_path).name
+        if not filename:
+            return None
+
+        return f"{public_base_url}/media/images/{filename}"
+
+    def _is_public_https_url(self, value: str) -> bool:
+        parsed = urlparse(value)
+        if parsed.scheme != "https" or not parsed.hostname:
+            return False
+
+        hostname = parsed.hostname.lower()
+        if hostname == "localhost" or hostname.endswith(".localhost"):
+            return False
+
+        try:
+            ip = ipaddress.ip_address(hostname)
+        except ValueError:
+            return True
+
+        return ip.is_global
 
     async def publish_container(self, creation_id: str, access_token: str) -> Optional[dict]:
         headers = {"Authorization": f"Bearer {access_token}"}
@@ -338,12 +634,18 @@ class ThreadsClient:
     async def get_post_permalink(self, post_id: str, access_token: str) -> Optional[str]:
         headers = {"Authorization": f"Bearer {access_token}"}
         params = {"fields": "id,permalink"}
-        async with httpx.AsyncClient(timeout=20) as client:
-            response = await client.get(
-                f"{self.base_url}/{post_id}",
-                params=params,
-                headers=headers,
-            )
+
+        async def request() -> httpx.Response:
+            async with httpx.AsyncClient(timeout=20) as client:
+                return await client.get(
+                    f"{self.base_url}/{post_id}",
+                    params=params,
+                    headers=headers,
+                )
+
+        response = await self._request_with_retry("get permalink", request)
+        if not response:
+            return None
 
         if response.is_success:
             return response.json().get("permalink")

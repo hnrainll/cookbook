@@ -12,6 +12,7 @@ from loguru import logger
 
 from app.core.config import settings
 from app.routes.auth import router as auth_router
+from app.routes.media import router as media_router
 from app.routes.pages import router as pages_router
 from app.routes.system import router as system_router
 from app.services.platforms.feishu.handler import router as feishu_router
@@ -232,6 +233,7 @@ app = FastAPI(
 )
 
 app.include_router(auth_router)
+app.include_router(media_router)
 app.include_router(pages_router)
 app.include_router(system_router)
 app.include_router(feishu_router)

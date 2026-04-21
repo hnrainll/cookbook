@@ -31,7 +31,7 @@ Sources                    Core                        Sinks
 - 飞书：文本、图片、富文本消息同步到饭否和 Telegram 频道
 - Telegram：文本消息同步到饭否和 Telegram 频道
 - Mastodon：文本、图片消息同步到 `mastodon.social` 或其他实例
-- Threads：文本消息同步到 Threads
+- Threads：文本、图片消息同步到 Threads（图片需要配置公网 HTTPS 可访问的 `PUBLIC_BASE_URL`）
 - Bluesky：文本、图片消息同步到 Bluesky
 - Telegram 频道转发：支持文本和图片，支持 `@username` 和数字 ID 两种频道配置
 - 图片自动压缩（≤2MB）
@@ -40,6 +40,7 @@ Sources                    Core                        Sinks
 - 消息去重、按平台做字符限制检查
 - 支持代理访问 Telegram API
 - Threads 长期 token 自动刷新
+- Threads 图片发布通过 `/media/images/{filename}` 暴露本地图片，需保证 `PUBLIC_BASE_URL` 可被 Threads 访问；发布前会等待图片容器处理完成
 - OAuth 回调建议显式带平台参数，例如 `/auth?platform=fanfou`、`/auth?platform=threads`
 - Threads 管理回调使用 `/callback/threads?type=uninstall` 或 `/callback/threads?type=delete`
 

@@ -102,14 +102,15 @@
 - 实现: `app/services/platforms/threads/client.py`
 - 功能:
   - 发送文本消息到 Threads
+  - 发送单图消息到 Threads
   - 处理 Threads OAuth 2.0 授权
   - 提供 `GET /callback/threads?type=...` 管理回调确认接口
   - callback 后立即把短期 token 换成长期 token
   - 发帖前按刷新窗口自动刷新长期 token
+  - 图片发布前轮询容器状态，等待 `FINISHED` 后再 publish
 - 当前限制:
-  - 第一版只支持文本 sink
-  - 不支持图片、视频、carousel
-  - 图片消息会直接跳过
+  - 图片发布依赖 `PUBLIC_BASE_URL` 生成公网 HTTPS 可访问的 `/media/images/{filename}` URL
+  - 不支持视频、carousel
 
 ### SQLite
 
