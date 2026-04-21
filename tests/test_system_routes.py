@@ -48,6 +48,24 @@ class TestSystemRoutes:
         assert response.content == b"image-bytes"
         assert response.headers["content-type"] == "image/jpeg"
 
+    def test_media_image_route_supports_head(self, tmp_path, monkeypatch):
+        image_dir = tmp_path / "images"
+        image_dir.mkdir()
+        image_file = image_dir / "test.jpg"
+        image_file.write_bytes(b"image-bytes")
+
+        monkeypatch.setattr("app.routes.media.IMAGE_DIR", image_dir)
+
+        app = FastAPI()
+        app.include_router(media_router)
+
+        client = TestClient(app)
+        response = client.head("/media/images/test.jpg")
+
+        assert response.status_code == 200
+        assert response.content == b""
+        assert response.headers["content-type"] == "image/jpeg"
+
     def test_media_image_route_rejects_missing_file(self, tmp_path, monkeypatch):
         monkeypatch.setattr("app.routes.media.IMAGE_DIR", tmp_path)
 

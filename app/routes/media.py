@@ -16,6 +16,15 @@ IMAGE_DIR = Path("data/images")
 
 @router.get("/media/images/{filename}")
 async def get_image(filename: str):
+    return _image_response(filename)
+
+
+@router.head("/media/images/{filename}")
+async def head_image(filename: str):
+    return _image_response(filename)
+
+
+def _image_response(filename: str) -> FileResponse:
     path = IMAGE_DIR / filename
     if path.name != filename or not path.is_file():
         raise HTTPException(status_code=404, detail="Image not found")
