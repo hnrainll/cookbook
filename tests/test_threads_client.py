@@ -843,7 +843,7 @@ class TestThreadsClient:
             loop.run_until_complete(client.handle_message(msg))
 
         mock_post_image.assert_awaited_once_with(
-            "https://gw.test/media/images/test.jpg",
+            "https://gw.test/cookbook/media/test.jpg",
             "caption",
         )
         assert replies == ["[Threads] 消息发送成功\n\nPost ID: post123"]

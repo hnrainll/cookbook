@@ -539,7 +539,7 @@ class ThreadsClient:
         if not filename:
             return None
 
-        return f"{public_base_url}/media/images/{filename}"
+        return f"{public_base_url}/cookbook/media/{filename}"
 
     def _is_public_https_url(self, value: str) -> bool:
         parsed = urlparse(value)

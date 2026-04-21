@@ -42,7 +42,7 @@ class TestSystemRoutes:
         app.include_router(media_router)
 
         client = TestClient(app)
-        response = client.get("/media/images/test.jpg")
+        response = client.get("/media/test.jpg")
 
         assert response.status_code == 200
         assert response.content == b"image-bytes"
@@ -60,7 +60,7 @@ class TestSystemRoutes:
         app.include_router(media_router)
 
         client = TestClient(app)
-        response = client.head("/media/images/test.jpg")
+        response = client.head("/media/test.jpg")
 
         assert response.status_code == 200
         assert response.content == b""
@@ -73,6 +73,6 @@ class TestSystemRoutes:
         app.include_router(media_router)
 
         client = TestClient(app)
-        response = client.get("/media/images/missing.jpg")
+        response = client.get("/media/missing.jpg")
 
         assert response.status_code == 404

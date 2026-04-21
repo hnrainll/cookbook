@@ -109,7 +109,7 @@
   - 发帖前按刷新窗口自动刷新长期 token
   - 图片发布前轮询容器状态，等待 `FINISHED` 后再 publish
 - 当前限制:
-  - 图片发布依赖 `PUBLIC_BASE_URL` 生成公网 HTTPS 可访问的 `/media/images/{filename}` URL
+  - 图片发布依赖 `PUBLIC_BASE_URL` 生成公网 HTTPS 可访问的 `/cookbook/media/{filename}` URL
   - 不支持视频、carousel
 
 ### SQLite

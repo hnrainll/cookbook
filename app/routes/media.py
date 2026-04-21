@@ -14,12 +14,12 @@ router = APIRouter(tags=["media"])
 IMAGE_DIR = Path("data/images")
 
 
-@router.get("/media/images/{filename}")
+@router.get("/media/{filename}")
 async def get_image(filename: str):
     return _image_response(filename)
 
 
-@router.head("/media/images/{filename}")
+@router.head("/media/{filename}")
 async def head_image(filename: str):
     return _image_response(filename)
 
