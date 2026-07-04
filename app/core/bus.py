@@ -9,7 +9,7 @@ Async Event Bus - Core Message Routing System
 """
 
 import asyncio
-from typing import Any, Awaitable, Callable, List
+from typing import Any, Awaitable, Callable, List, Optional
 
 from loguru import logger
 
@@ -22,6 +22,22 @@ MessageHandler = Callable[[UnifiedMessage], Awaitable[None]]
 def _handler_name(handler: MessageHandler) -> str:
     """获取 handler 的可读名称，兼容任意可调用对象。"""
     return getattr(handler, "__name__", handler.__class__.__name__)
+
+
+def _sink_platform_name(handler: MessageHandler) -> Optional[str]:
+    """从已注册 handler 推断对应的 sink 平台名。"""
+    owner = getattr(handler, "__self__", None)
+    if owner is None:
+        return None
+
+    class_name = owner.__class__.__name__
+    return {
+        "FanfouClient": "fanfou",
+        "TelegramClient": "telegram",
+        "MastodonClient": "mastodon",
+        "ThreadsClient": "threads",
+        "BlueskyClient": "bluesky",
+    }.get(class_name)
 
 
 class EventBus:
@@ -101,14 +117,15 @@ class EventBus:
             return_exceptions=True,
         )
 
-        # 统计处理结果
-        success_count = sum(1 for r in results if not isinstance(r, Exception))
-        error_count = len(results) - success_count
+        # 这里统计的是 handler 执行状态，不代表各 sink 的业务发送结果。
+        completed_count = sum(1 for r in results if not isinstance(r, Exception))
+        raised_count = len(results) - completed_count
 
         logger.info(
-            f"Message {message.event_id} distributed: "
-            f"{success_count} succeeded, {error_count} failed"
+            f"Message {message.event_id} distributed to {len(self._handlers)} handlers: "
+            f"{completed_count} completed, {raised_count} raised exceptions"
         )
+        await self._log_sink_result_summary(message)
 
     async def _safe_handle(self, handler: MessageHandler, message: UnifiedMessage) -> Any:
         """
@@ -143,6 +160,63 @@ class EventBus:
     def get_handler_count(self) -> int:
         """获取已注册的处理器数量"""
         return len(self._handlers)
+
+    async def _log_sink_result_summary(self, message: UnifiedMessage) -> None:
+        if message.command:
+            return
+
+        expected_platforms = sorted(
+            {
+                platform
+                for handler in self._handlers
+                if (platform := _sink_platform_name(handler)) is not None
+            }
+        )
+        if not expected_platforms:
+            return
+
+        from app.services.storage.db import DatabaseManager
+
+        db = DatabaseManager.get_instance()
+        if not db:
+            logger.debug("Sink result summary skipped: DatabaseManager not initialized")
+            return
+
+        sink_results = await db.get_sink_results(str(message.event_id))
+        result_by_platform = {result["sink_platform"]: result for result in sink_results}
+
+        success_count = 0
+        failed_platforms: list[str] = []
+        missing_platforms: list[str] = []
+
+        for platform in expected_platforms:
+            result = result_by_platform.get(platform)
+            if result is None:
+                missing_platforms.append(platform)
+            elif result["success"]:
+                success_count += 1
+            else:
+                failed_platforms.append(platform)
+
+        logger.info(
+            "Message {} sink results: {} succeeded, {} failed, {} missing",
+            message.event_id,
+            success_count,
+            len(failed_platforms),
+            len(missing_platforms),
+        )
+        if failed_platforms:
+            logger.warning(
+                "Message {} failed sinks: {}",
+                message.event_id,
+                ", ".join(failed_platforms),
+            )
+        if missing_platforms:
+            logger.warning(
+                "Message {} sinks without persisted result: {}",
+                message.event_id,
+                ", ".join(missing_platforms),
+            )
 
     def clear_handlers(self) -> None:
         """清除所有处理器（主要用于测试）"""

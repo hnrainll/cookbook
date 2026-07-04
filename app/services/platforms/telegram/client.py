@@ -279,6 +279,7 @@ class TelegramClient:
         if not message.image_data:
             if reply_service:
                 reply_service.reply(message, f"[{self._channel_name}] 图片数据为空，无法发送。")
+            await self._save_sink_result(message, None)
             return
 
         caption = self._format_channel_message(message) if message.content else None

@@ -136,6 +136,7 @@ class BlueskyClient:
         if not message.image_data:
             if reply_service:
                 reply_service.reply(message, "[Bluesky] 图片数据为空，无法发送。")
+            await self._save_sink_result(message, None, "图片数据为空，无法发送。")
             return
 
         if message.content and len(message.content) > BLUESKY_TEXT_LIMIT.default_limit:

@@ -242,6 +242,32 @@ class DatabaseManager:
             logger.error(f"Failed to save sink result: {e}")
             return False
 
+    async def get_sink_results(self, event_id: str) -> list[dict]:
+        if not self.conn:
+            return []
+
+        cursor = await self.conn.execute(
+            """
+            SELECT sink_platform, status_id, status_url, response_data, success, error_message
+            FROM sink_results
+            WHERE event_id = ?
+            ORDER BY sink_platform
+        """,
+            (event_id,),
+        )
+        rows = await cursor.fetchall()
+        return [
+            {
+                "sink_platform": row[0],
+                "status_id": row[1],
+                "status_url": row[2],
+                "response_data": row[3],
+                "success": bool(row[4]),
+                "error_message": row[5],
+            }
+            for row in rows
+        ]
+
     # ===== auth_requests (临时 request token) 操作 =====
 
     async def save_request_token(

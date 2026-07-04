@@ -277,6 +277,7 @@ class FanfouClient:
         if not message.image_data:
             if reply_service:
                 reply_service.reply(message, "图片数据为空，无法发送。")
+            await self._save_sink_result(message, None, "图片数据为空，无法发送。")
             return
 
         text = message.content if message.content else None
