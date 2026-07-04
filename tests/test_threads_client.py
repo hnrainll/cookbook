@@ -614,6 +614,35 @@ class TestThreadsClient:
         finally:
             loop.close()
 
+    def test_get_container_status_sets_reauth_error_message(self):
+        loop = asyncio.new_event_loop()
+        try:
+            client = ThreadsClient()
+
+            with patch("httpx.AsyncClient.get") as mock_get:
+                mock_get.return_value = MockResponse(
+                    400,
+                    {
+                        "error": {
+                            "message": (
+                                "Data access has expired. Users must re-authorize the app "
+                                "to restore access."
+                            ),
+                            "code": 100,
+                            "type": "OAuthException",
+                        }
+                    },
+                )
+
+                result = loop.run_until_complete(
+                    client.get_container_status("container123", "token")
+                )
+
+            assert result is None
+            assert client._last_error_message == "Threads 授权已失效，需要重新授权"
+        finally:
+            loop.close()
+
     def test_refresh_access_token_uses_access_token_param(self):
         loop = asyncio.new_event_loop()
         try:
@@ -798,6 +827,57 @@ class TestThreadsClient:
         row = loop.run_until_complete(fetch_row())
         assert row == ("threads", 0, "文本发布失败")
 
+    def test_handle_text_reauth_replies_with_auth_url(self, db_manager):
+        mgr, loop = db_manager
+        AuthService.create_instance().register("threads", ThreadsAuthHandler())
+        ReplyService.create_instance()
+        replies = []
+        reply_service = ReplyService.get_instance()
+        assert reply_service is not None
+        reply_service.register(
+            MessageSource.FEISHU,
+            reply_handler=lambda m, t: replies.append(t),
+        )
+
+        client = ThreadsClient()
+        with (
+            patch.object(
+                client,
+                "try_post_text",
+                AsyncMock(
+                    return_value=ThreadsPostResult(error_message="Threads 授权已失效，需要重新授权")
+                ),
+            ),
+            patch.object(
+                ThreadsAuthHandler,
+                "gen_auth_url",
+                AsyncMock(return_value="https://threads.example/reauth"),
+            ),
+        ):
+            msg = UnifiedMessage(
+                source=MessageSource.FEISHU,
+                content="hello threads",
+                message_type="text",
+                sender_id="user1",
+            )
+            loop.run_until_complete(client.handle_message(msg))
+
+        assert replies == [
+            "[Threads] Threads 授权已失效，需要重新授权",
+            "[Threads] 请点击重新授权：\nhttps://threads.example/reauth",
+        ]
+
+        async def fetch_row():
+            assert mgr.conn is not None
+            cursor = await mgr.conn.execute(
+                "SELECT sink_platform, success, error_message FROM sink_results WHERE event_id = ?",
+                (str(msg.event_id),),
+            )
+            return await cursor.fetchone()
+
+        row = loop.run_until_complete(fetch_row())
+        assert row == ("threads", 0, "Threads 授权已失效，需要重新授权")
+
     def test_success_text_prefers_permalink(self):
         client = ThreadsClient()
 
@@ -828,8 +908,12 @@ class TestThreadsClient:
             ),
             patch.object(
                 client,
-                "post_image",
-                AsyncMock(return_value={"id": "post123", "creation_id": "container123"}),
+                "try_post_image",
+                AsyncMock(
+                    return_value=ThreadsPostResult(
+                        response={"id": "post123", "creation_id": "container123"}
+                    )
+                ),
             ) as mock_post_image,
         ):
             msg = UnifiedMessage(
@@ -965,6 +1049,97 @@ class TestThreadsClient:
 
         mock_post_text.assert_not_called()
         assert replies == ["[Threads] 消息长度超过 500 字，无法发送"]
+
+    def test_try_post_image_reports_reauth_error_from_container_status(self):
+        loop = asyncio.new_event_loop()
+        try:
+            client = ThreadsClient()
+
+            async def not_ready(*args, **kwargs):
+                client._last_error_message = "Threads 授权已失效，需要重新授权"
+                return False
+
+            with (
+                patch.object(
+                    client,
+                    "get_valid_token",
+                    AsyncMock(return_value={"access_token": "token"}),
+                ),
+                patch.object(
+                    client,
+                    "create_image_container",
+                    AsyncMock(return_value="container123"),
+                ),
+                patch.object(
+                    client,
+                    "wait_for_container_ready",
+                    AsyncMock(side_effect=not_ready),
+                ),
+            ):
+                result = loop.run_until_complete(
+                    client.try_post_image("https://gw.test/cookbook/media/test.jpg", "caption")
+                )
+
+            assert result.response is None
+            assert result.error_message == "Threads 授权已失效，需要重新授权"
+        finally:
+            loop.close()
+
+    def test_handle_image_reauth_replies_with_auth_url(self, db_manager):
+        mgr, loop = db_manager
+        AuthService.create_instance().register("threads", ThreadsAuthHandler())
+        ReplyService.create_instance()
+        replies = []
+        reply_service = ReplyService.get_instance()
+        assert reply_service is not None
+        reply_service.register(
+            MessageSource.FEISHU,
+            reply_handler=lambda m, t: replies.append(t),
+        )
+
+        client = ThreadsClient()
+        with (
+            patch(
+                "app.services.platforms.threads.client.settings.public_base_url", "https://gw.test"
+            ),
+            patch.object(
+                client,
+                "try_post_image",
+                AsyncMock(
+                    return_value=ThreadsPostResult(error_message="Threads 授权已失效，需要重新授权")
+                ),
+            ),
+            patch.object(
+                ThreadsAuthHandler,
+                "gen_auth_url",
+                AsyncMock(return_value="https://threads.example/reauth"),
+            ),
+        ):
+            msg = UnifiedMessage(
+                source=MessageSource.FEISHU,
+                content="caption",
+                message_type="image",
+                sender_id="user1",
+                image_data=b"fake",
+                image_path="data/images/test.jpg",
+            )
+            loop.run_until_complete(client.handle_message(msg))
+
+        assert replies == [
+            "[Threads] Threads 授权已失效，需要重新授权",
+            "[Threads] 请点击重新授权：\nhttps://threads.example/reauth",
+        ]
+
+        async def fetch_row():
+            assert mgr.conn is not None
+            cursor = await mgr.conn.execute(
+                "SELECT sink_platform, success, error_message FROM sink_results WHERE event_id = ?",
+                (str(msg.event_id),),
+            )
+            return await cursor.fetchone()
+
+        row = loop.run_until_complete(fetch_row())
+        assert row == ("threads", 0, "Threads 授权已失效，需要重新授权")
 
     def test_publish_container_refreshes_on_auth_error(self):
         loop = asyncio.new_event_loop()

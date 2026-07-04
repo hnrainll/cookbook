@@ -198,6 +198,7 @@ class ThreadsClient:
     def __init__(self):
         self.base_url = settings.threads_base_url.rstrip("/")
         self.refresh_window_days = settings.threads_refresh_window_days
+        self._last_error_message: Optional[str] = None
         logger.info("ThreadsClient initialized")
 
     async def start(self) -> None:
@@ -256,6 +257,7 @@ class ThreadsClient:
         )
         if reply_service and result.error_message:
             reply_service.reply(message, f"[Threads] {result.error_message}")
+            await self._reply_reauth_link_if_needed(message, result.error_message, reply_service)
         elif reply_service:
             reply_service.reply(message, "[Threads] 消息发送失败")
 
@@ -281,11 +283,16 @@ class ThreadsClient:
             await self._save_sink_result(message, None, error_message)
             return
 
-        ret = await self.post_image(image_url, message.content or None)
-        await self._save_sink_result(message, ret)
+        result = await self.try_post_image(image_url, message.content or None)
+        await self._save_sink_result(
+            message, result.response, result.error_message or "图片发送失败"
+        )
 
-        if reply_service and ret:
-            reply_service.reply(message, self._success_text(ret))
+        if reply_service and result.response:
+            reply_service.reply(message, self._success_text(result.response))
+        elif reply_service and result.error_message:
+            reply_service.reply(message, f"[Threads] {result.error_message}")
+            await self._reply_reauth_link_if_needed(message, result.error_message, reply_service)
         elif reply_service:
             reply_service.reply(message, "[Threads] 图片发送失败")
 
@@ -294,21 +301,22 @@ class ThreadsClient:
         return result.response
 
     async def try_post_text(self, text: str) -> ThreadsPostResult:
+        self._last_error_message = None
         token_payload = await self.get_valid_token()
         if not token_payload:
             return ThreadsPostResult(error_message="未授权或 token 不可用")
 
         creation_id = await self.create_text_container(text, token_payload["access_token"])
         if not creation_id:
-            return ThreadsPostResult(error_message="文本容器创建失败")
+            return ThreadsPostResult(error_message=self._last_error_message or "文本容器创建失败")
 
         ready = await self.wait_for_container_ready(creation_id, token_payload["access_token"])
         if not ready:
-            return ThreadsPostResult(error_message="文本容器未完成处理")
+            return ThreadsPostResult(error_message=self._last_error_message or "文本容器未完成处理")
 
         publish_response = await self.publish_container(creation_id, token_payload["access_token"])
         if not publish_response:
-            return ThreadsPostResult(error_message="文本发布失败")
+            return ThreadsPostResult(error_message=self._last_error_message or "文本发布失败")
 
         enriched_response = await self._enrich_publish_response(
             publish_response, creation_id, token_payload["access_token"]
@@ -324,6 +332,7 @@ class ThreadsClient:
         image_url: str,
         text: Optional[str] = None,
     ) -> ThreadsPostResult:
+        self._last_error_message = None
         token_payload = await self.get_valid_token()
         if not token_payload:
             return ThreadsPostResult(error_message="未授权或 token 不可用")
@@ -335,15 +344,15 @@ class ThreadsClient:
             alt_text=text,
         )
         if not creation_id:
-            return ThreadsPostResult(error_message="图片容器创建失败")
+            return ThreadsPostResult(error_message=self._last_error_message or "图片容器创建失败")
 
         ready = await self.wait_for_container_ready(creation_id, token_payload["access_token"])
         if not ready:
-            return ThreadsPostResult(error_message="图片容器未完成处理")
+            return ThreadsPostResult(error_message=self._last_error_message or "图片容器未完成处理")
 
         publish_response = await self.publish_container(creation_id, token_payload["access_token"])
         if not publish_response:
-            return ThreadsPostResult(error_message="图片发布失败")
+            return ThreadsPostResult(error_message=self._last_error_message or "图片发布失败")
 
         enriched_response = await self._enrich_publish_response(
             publish_response, creation_id, token_payload["access_token"]
@@ -385,6 +394,7 @@ class ThreadsClient:
             payload = response.json()
             return payload.get("id")
 
+        self._set_last_error_from_response(response, "Threads 文本容器创建失败")
         logger.error(
             "Threads create container failed: status_code={} body={}",
             response.status_code,
@@ -460,6 +470,7 @@ class ThreadsClient:
             payload = response.json()
             return payload.get("id")
 
+        self._set_last_error_from_response(response, "Threads 图片容器创建失败")
         logger.error(
             "Threads create image container failed: status_code={} body={}",
             response.status_code,
@@ -522,6 +533,7 @@ class ThreadsClient:
         if response.is_success:
             return response.json()
 
+        self._set_last_error_from_response(response, "Threads 容器状态查询失败")
         logger.error(
             "Threads get container status failed: creation_id={} status_code={} body={}",
             creation_id,
@@ -580,6 +592,7 @@ class ThreadsClient:
                     return retry_response.json()
                 response = retry_response
 
+        self._set_last_error_from_response(response, "Threads 发布失败")
         logger.error(
             "Threads publish failed: creation_id={} status_code={} body={}",
             creation_id,
@@ -650,6 +663,7 @@ class ThreadsClient:
         if response.is_success:
             return response.json().get("permalink")
 
+        self._set_last_error_from_response(response, "Threads 获取帖子链接失败")
         logger.warning(
             "Threads get permalink failed: post_id={} status_code={} body={}",
             post_id,
@@ -759,6 +773,61 @@ class ThreadsClient:
                 else {}
             ),
         }
+
+    async def _reply_reauth_link_if_needed(
+        self,
+        message: UnifiedMessage,
+        error_message: str,
+        reply_service,
+    ) -> None:
+        if not self._is_reauth_required_message(error_message):
+            return
+
+        from app.core.auth import AuthService
+
+        auth_service = AuthService.get_instance()
+        if not auth_service:
+            reply_service.reply(message, "[Threads] 请手动发送 /login threads 重新授权")
+            return
+
+        auth_url = await auth_service.start_auth("threads", message.sender_id)
+        reply_service.reply(message, f"[Threads] 请点击重新授权：\n{auth_url}")
+
+    def _set_last_error_from_response(self, response: httpx.Response, fallback: str) -> None:
+        self._last_error_message = self._response_error_message(response) or fallback
+
+    def _response_error_message(self, response: httpx.Response) -> Optional[str]:
+        if self._is_reauth_required_response(response):
+            return "Threads 授权已失效，需要重新授权"
+
+        try:
+            error = response.json().get("error", {})
+        except ValueError:
+            return None
+
+        message = error.get("message")
+        if isinstance(message, str) and message.strip():
+            return message.strip()
+        return None
+
+    def _is_reauth_required_response(self, response: httpx.Response) -> bool:
+        try:
+            error = response.json().get("error", {})
+        except ValueError:
+            return False
+
+        message = error.get("message")
+        if not isinstance(message, str):
+            return False
+        return self._is_reauth_required_message(message)
+
+    def _is_reauth_required_message(self, message: str) -> bool:
+        message_lower = message.lower()
+        return (
+            "data access has expired" in message_lower
+            or "re-authorize" in message_lower
+            or "重新授权" in message
+        )
 
     def _success_text(self, response_data: dict) -> str:
         permalink = response_data.get("permalink")
