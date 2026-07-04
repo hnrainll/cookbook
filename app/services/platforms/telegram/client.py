@@ -8,7 +8,9 @@ Telegram 平台适配器 - 使用 aiogram 异步客户端
 """
 
 import asyncio
+import io
 import json
+from pathlib import Path
 from typing import ClassVar, Optional
 
 from aiogram import Bot, Dispatcher, types
@@ -91,36 +93,20 @@ class TelegramClient:
             logger.debug("Skipping message without sender info")
             return
 
-        # 只处理文本消息
-        if not message.text:
-            logger.debug(f"Skipping non-text message from {message.from_user.id}")
-            return
+        unified_msg: Optional[UnifiedMessage] = None
 
-        # 识别命令消息（/login fanfou, /logout fanfou 等）
-        command = None
-        content = message.text
-        if message.text.startswith("/"):
-            # /start 由专用 handler 处理
+        if message.photo:
+            unified_msg = await self._build_image_message(message)
+        elif message.text:
             if message.text.strip() == "/start":
                 return
-            command = message.text
-            content = message.text
+            unified_msg = self._build_text_message(message)
+        else:
+            logger.debug(f"Skipping unsupported Telegram message from {message.from_user.id}")
+            return
 
-        # 构建统一消息对象
-        unified_msg = UnifiedMessage(
-            source=MessageSource.TELEGRAM,
-            content=content,
-            sender_id=str(message.from_user.id),
-            sender_name=message.from_user.full_name,
-            chat_id=str(message.chat.id),
-            command=command,
-            raw_data={
-                "message_id": message.message_id,
-                "chat_type": message.chat.type,
-                "username": message.from_user.username,
-                "date": message.date.isoformat() if message.date else None,
-            },
-        )
+        if not unified_msg:
+            return
 
         logger.info(
             f"Received Telegram message: {unified_msg.event_id} "
@@ -131,6 +117,84 @@ class TelegramClient:
         await bus.publish(unified_msg)
 
         # 发送确认消息（不再在这里直接回复，由 Sink 通过 ReplyService 回复）
+
+    def _build_text_message(self, message: types.Message) -> UnifiedMessage:
+        assert message.from_user is not None
+        assert message.text is not None
+
+        command = None
+        content = message.text
+        if message.text.startswith("/"):
+            command = message.text
+
+        return UnifiedMessage(
+            source=MessageSource.TELEGRAM,
+            content=content,
+            sender_id=str(message.from_user.id),
+            sender_name=message.from_user.full_name,
+            chat_id=str(message.chat.id),
+            command=command,
+            raw_data=self._raw_message_data(message, message_type="text"),
+        )
+
+    async def _build_image_message(self, message: types.Message) -> Optional[UnifiedMessage]:
+        assert message.from_user is not None
+        assert message.photo
+
+        image_data = await self._download_photo_bytes(message.photo[-1].file_id)
+        if not image_data:
+            logger.warning("Skipping Telegram photo message without downloadable image data")
+            return None
+
+        image_path = self._save_image(str(message.message_id), image_data)
+        return UnifiedMessage(
+            source=MessageSource.TELEGRAM,
+            content=message.caption or "",
+            message_type="image",
+            sender_id=str(message.from_user.id),
+            sender_name=message.from_user.full_name,
+            chat_id=str(message.chat.id),
+            image_data=image_data,
+            image_path=image_path,
+            raw_data=self._raw_message_data(message, message_type="image"),
+        )
+
+    async def _download_photo_bytes(self, file_id: str) -> Optional[bytes]:
+        if self.bot is None:
+            logger.warning("Telegram bot not initialized")
+            return None
+
+        try:
+            file = await self.bot.get_file(file_id)
+            if not file.file_path:
+                logger.warning(f"Telegram photo {file_id} is missing file_path")
+                return None
+
+            destination = io.BytesIO()
+            await self.bot.download_file(file.file_path, destination=destination)
+        except Exception as e:
+            logger.error(f"Failed to download Telegram photo {file_id}: {e}", exc_info=True)
+            return None
+
+        return destination.getvalue()
+
+    def _save_image(self, event_id: str, image_data: bytes) -> str:
+        image_dir = Path("data/images")
+        image_dir.mkdir(parents=True, exist_ok=True)
+        image_path = f"data/images/{event_id}.jpg"
+        Path(image_path).write_bytes(image_data)
+        return image_path
+
+    def _raw_message_data(self, message: types.Message, message_type: str) -> dict:
+        assert message.from_user is not None
+
+        return {
+            "message_id": message.message_id,
+            "chat_type": message.chat.type,
+            "username": message.from_user.username,
+            "date": message.date.isoformat() if message.date else None,
+            "message_type": message_type,
+        }
 
     async def start(self) -> None:
         """
