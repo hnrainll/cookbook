@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     # ===== FastAPI 配置 =====
     debug: bool = Field(default=False, description="调试模式")
     app_name: str = Field(default="Message Sync Gateway", description="应用名称")
-    host: str = Field(default="0.0.0.0", description="服务监听地址")
+    host: str = Field(default="127.0.0.1", description="服务监听地址")
     port: int = Field(default=8009, description="服务监听端口")
     public_contact_email: str = Field(
         default="privacy@example.com",

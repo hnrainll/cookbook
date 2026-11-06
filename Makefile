@@ -2,11 +2,11 @@
 
 # 启动服务
 run:
-	uv run uvicorn app.main:app --host 0.0.0.0 --port 8009
+	uv run uvicorn app.main:app --host 127.0.0.1 --port 8009
 
 # 开发模式（热重载）
 dev:
-	uv run uvicorn app.main:app --host 0.0.0.0 --port 8009 --reload
+	uv run uvicorn app.main:app --host 127.0.0.1 --port 8009 --reload
 
 # 运行测试
 test:

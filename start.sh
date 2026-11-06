@@ -12,7 +12,7 @@ uv sync
 
 # 后台启动
 source .venv/bin/activate
-nohup gunicorn app.main:app -w 1 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8009 >> app.log 2>&1 &
+nohup gunicorn app.main:app -w 1 -k uvicorn.workers.UvicornWorker --bind 127.0.0.1:8009 >> app.log 2>&1 &
 
 echo $! > "$PID_FILE"
 echo "app 项目已在后台启动 (PID: $!)，日志输出到 app.log"
